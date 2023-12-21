@@ -1,0 +1,49 @@
+input:
+  source:
+    filename:
+  bf:
+    filename:
+    channel:
+  fluor:
+    filename:
+    channel:
+  fluor_hq:
+    filename:
+    metadata:
+    max_stitch_offset_um: 50
+    flatfield_filename:
+    channel:
+
+magnet:
+  pixel_size: 12um
+  shape: 5
+  size_range_um: 1, 5
+  size_slice_thickness_um: 0.2
+  lowe_ratio: 0.75
+  max_iter: 200
+  min_npoints: 10
+  min_match_rate: 0.5
+
+sample:
+  pixel_size: 12um
+  shape: 4
+  min_match_rate: 0.5
+  snap_scaledown: 0.25
+  snap_margin: 0.2
+
+roi:
+  sigma: 8
+  min_cell_diameter: 30
+  max_cell_diameter: 90
+  watershed_threshold: 0.92
+  merge_regions: True
+  merge_intersection_ratio: 0.33
+  filter_small_regions: True
+
+point_matching:
+  method: [cpd, features]
+
+output:
+  folder: array
+  datafile: array.json
+  pixel_size: 2.27um
