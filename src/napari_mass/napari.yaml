@@ -13,10 +13,8 @@ contributions:
   commands:
     - id: napari-mass.mass
       python_name: napari_mass._widget:MassWidget
-      #python_name: napari_mass._widget:file_widget
       title: Microscopy Array Section Setup
 
   widgets:
     - command: napari-mass.mass
       display_name: Microscopy Array Section Setup
-      autogenerate: true

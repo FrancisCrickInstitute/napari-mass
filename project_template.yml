@@ -1,0 +1,63 @@
+project:
+  filename: {type: path, function: dialog_project_file, tip: 'Set project file'}
+
+input:
+  source:
+    filename: {type: path, function: dialog_source}
+  bf:
+    filename: {type: path, function: dialog_bf}
+    channel: {type: str}
+  fluor:
+    filename: {type: path, function: dialog_fluor}
+    channel: {type: str}
+  fluor_hq:
+    filename: {type: path, function: dialog_fluor_hq}
+    metadata: {type: path, function: dialog_fluor_hq_metadata}
+    max_stitch_offset_um: {value: 50.0}
+    flatfield_filename: {type: path, function: dialog_fluor_hq_flatfield}
+    channel: {type: str}
+
+magnet:
+  label: Magnets
+  pixel_size: {value: 12um}
+  shape: {value: 5}
+  size_range_um: {value: '1, 5'}
+  size_slice_thickness_um: {value: 0.2}
+  lowe_ratio: {value: 0.75}
+  max_iter: {value: 200}
+  min_npoints: {value: 10}
+  min_match_rate: {value: 0.5}
+  detect: {type: button, function: detect_magnets, tip: 'Automatic section detection'}
+  point_matching_methods: {value: 'cpd, features'}
+  order: {type: button, function: order_magnets, tip: 'Automatic section Z stack ordering'}
+
+sample:
+  label: Sample
+  pixel_size: {value: 12um}
+  shape: {value: 4}
+  min_match_rate: {value: 0.5}
+  snap_scaledown: {value: 0.25}
+  snap_margin: {value: 0.2}
+  detect: {type: button, function: detect_sample, tip: 'Automatic section detection'}
+  order: {type: button, function: order_sample, tip: 'Automatic section Z stack ordering'}
+  copy: {type: button, function: copy_sample, tip: 'Copy selected section, click view to paste'}
+  propagate: {type: button, function: propagate_sample, tip: 'Propagate to all sections'}
+
+roi:
+  label: ROIs
+  sigma: {value: 8.0}
+  min_cell_diameter: {value: 30.0}
+  max_cell_diameter: {value: 90.0}
+  watershed_threshold: {value: 0.92}
+  merge_regions: {value: True}
+  merge_intersection_ratio: {value: 0.33}
+  filter_small_regions: {value: True}
+  propagate: {type: button, function: propagate_roi, tip: 'Propagate to all sections'}
+
+focus:
+  propagate: {type: button, function: propagate_focus, tip: 'Propagate to all sections'}
+
+output:
+  folder: {type: path, function: dialog_output_folder}
+  datafile: {type: path, function: dialog_output_datafile}
+  pixel_size: {value: 2.27um}
