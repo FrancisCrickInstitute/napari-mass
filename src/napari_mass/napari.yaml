@@ -11,6 +11,13 @@ contributions:
     - id: napari-mass.mass
       python_name: napari_mass._widget:MassWidget
       title: Microscopy Array Section Setup
+    - id: napari-mass.get_reader
+      python_name: napari_mass._widget:get_reader
+      title: Open data with Microscopy Array Section Setup
+  readers:
+    - command: napari-mass.get_reader
+      accepts_directories: true
+      filename_patterns: ['*.tif', '*.tiff', '*.zarr']
 
   widgets:
     - command: napari-mass.mass

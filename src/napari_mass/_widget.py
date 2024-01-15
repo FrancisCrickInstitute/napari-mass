@@ -5,12 +5,26 @@
 
 
 import napari
-import os
-import yaml
 from napari.qt import QtViewer
 from napari.components.viewer_model import ViewerModel
+import numpy as np
+import os
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import *
+import yaml
+
+from napari_mass.parameters import *
+
+
+def get_reader(path):
+    if isinstance(path, list):
+        path = path[0]
+
+    ext = os.path.splitext(path)[1]
+
+    if ext in READER_SUPPORTED_TYPES:
+        return widget.load_dropped_image
+    return None
 
 
 class QtViewerModelWrap(QtViewer):
@@ -20,17 +34,17 @@ class QtViewerModelWrap(QtViewer):
 
 
 class ParamControl:
-    def __init__(self, main_widget, event, param_dict, param_label):
+    def __init__(self, main_widget, event, params, param_label):
         self.main_widget = main_widget
-        self.param_dict = param_dict
+        self.params = params
         self.param_label = param_label
         event.connect(self.changed)
 
     def changed(self, value):
-        param_dict = self.param_dict
+        params = self.params
         for key in self.param_label.split('.'):
-            param_dict = param_dict[key]
-        param_dict['value'] = value
+            params = params[key]
+        params['value'] = value
         self.main_widget.save_params()
 
 
@@ -56,24 +70,45 @@ class PathControl:
 
 
 class MassWidget(QSplitter):
-    PROJECT_TEMPLATE = 'project_template.yml'
-
     def __init__(self, napari_viewer: napari.Viewer):
         super().__init__()
+        global widget
+        widget = self
+
+        self.imaging = None
         self.clear_controls()
         self.viewer = napari_viewer
-        self.set_project = False
 
         self.viewer_model = ViewerModel()
         self.detail_viewer = QtViewerModelWrap(self.viewer, self.viewer_model)
 
+        #self.viewer.window.qt_viewer.dropEvent = self.viewer_dropped
+        #self.viewer.layers.events.inserted.connect(self.viewer_dropped)
+
         #self.viewer_model.add_points([(0,0), (0,100), (100,0), (100,100)], name='test_layer')
 
-        self.params_widget = self.create_widgets_from_template(self.PROJECT_TEMPLATE)
+        self.params_widget = self.create_widgets_from_template(PROJECT_TEMPLATE)
         self.setOrientation(Qt.Vertical)
         self.addWidget(self.params_widget)
         self.addWidget(self.detail_viewer)
         self.setMaximumWidth(300)   # only way found to limit detail_viewer initial width
+
+        self.set_project(False)
+
+    def set_project(self, set):
+        self.project_set = set
+        for i in range(self.params_widget.count())[1:]:
+            self.params_widget.setTabEnabled(i, set)
+
+    def init_imaging(self):
+        if self.project_set:
+            from napari_mass.Imaging import Imaging
+            self.imaging = Imaging(self.params)
+
+    def load_dropped_image(self, path):
+        self.all_widgets['input.source.filename'].setText(path)
+        layers = [(np.zeros([1000, 1000, 3]), {}, 'image')]
+        return layers
 
     def clear_controls(self):
         self.all_widgets = {}
@@ -82,9 +117,9 @@ class MassWidget(QSplitter):
 
     def create_widgets_from_template(self, path):
         with open(path, 'r') as infile:
-            self.param_dict = yaml.load(infile, Loader=yaml.Loader)
+            self.params = yaml.load(infile, Loader=yaml.Loader)
         tab_widget = QTabWidget()
-        for label0, section_dict in self.param_dict.items():
+        for label0, section_dict in self.params.items():
             tip = None
             label = label0.replace('_', ' ').capitalize()
             if 'label' in section_dict:
@@ -137,22 +172,22 @@ class MassWidget(QSplitter):
                     var_widget.setChecked(True)
                 else:
                     var_widget.setChecked(False)
-                self.param_controls[param_label] = ParamControl(self, var_widget.clicked, self.param_dict, param_label)
+                self.param_controls[param_label] = ParamControl(self, var_widget.clicked, self.params, param_label)
             elif value_type == 'float':
                 var_widget = QDoubleSpinBox()
                 if value is not None:
                     var_widget.setValue(value)
-                self.param_controls[param_label] = ParamControl(self, var_widget.valueChanged, self.param_dict, param_label)
+                self.param_controls[param_label] = ParamControl(self, var_widget.valueChanged, self.params, param_label)
             elif value_type == 'int':
                 var_widget = QSpinBox()
                 if value is not None:
                     var_widget.setValue(value)
-                self.param_controls[param_label] = ParamControl(self, var_widget.valueChanged, self.param_dict, param_label)
+                self.param_controls[param_label] = ParamControl(self, var_widget.valueChanged, self.params, param_label)
             elif value_type is not None:
                 var_widget = QLineEdit()
                 if value is not None:
                     var_widget.setText(value)
-                self.param_controls[param_label] = ParamControl(self, var_widget.textChanged, self.param_dict, param_label)
+                self.param_controls[param_label] = ParamControl(self, var_widget.textChanged, self.params, param_label)
 
             var_widget.setObjectName(param_label)
             self.all_widgets[param_label] = var_widget
@@ -177,20 +212,25 @@ class MassWidget(QSplitter):
         widget.setLayout(layout)
         return widget
 
+    def enable_tabs(self):
+        for i in range(self.params_widget.count())[1:]:
+            self.params_widget.setTabEnabled(i, True)
+
     def save_params(self):
-        if self.set_project:
-            path = self.param_dict['project']['filename']['value']
+        if self.project_set:
+            path = self.params['project']['filename']['value']
             with open(path, 'w') as outfile:
-                yaml.dump(self.param_dict, outfile, default_flow_style=None, sort_keys=False)
+                yaml.dump(self.params, outfile, default_flow_style=None, sort_keys=False)
 
     def dialog_project_file(self, path):
-        self.set_project = True
+        self.set_project(True)
         if os.path.exists(path):
             self.clear_controls()
             self.replaceWidget(0, self.create_widgets_from_template(path))
             self.all_widgets['project.filename'].setText(path)
         else:
             self.save_params()
+        self.init_imaging()
 
     def dialog_output_folder(self, path):
         print(path)
@@ -233,7 +273,7 @@ def path_dialog(dialog_type, value, caption=None):
         caption = ' '.join(types).capitalize()
 
     filter = ''
-    if len(types) > 0:
+    if len(types) > 1:
         file_type = types[1]
         if file_type.startswith('image'):
             filter += 'Images (*.tif *.tiff *.zarr);;'
@@ -252,10 +292,15 @@ def path_dialog(dialog_type, value, caption=None):
         result = QFileDialog.getSaveFileName(
             caption=caption, directory=value, filter=filter
         )
+        result = result[0]
     else:
         result = QFileDialog.getOpenFileName(
             caption=caption, directory=value, filter=filter
         )
-    if result[0]:
-        return result[0]
-    return None
+        result = result[0]
+    if result == '':
+        result = None
+    return result
+
+
+widget: MassWidget

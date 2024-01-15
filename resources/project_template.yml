@@ -58,6 +58,6 @@ focus:
   propagate: {type: button, function: propagate_focus, tip: 'Propagate to all sections'}
 
 output:
-  folder: {type: path.folder, function: dialog_output_folder}
+  folder: {type: path.folder, function: dialog_output_folder, value: 'mass'}
   datafile: {type: path.save.yaml_json, function: dialog_output_datafile}
   pixel_size: {value: 2.27um}
