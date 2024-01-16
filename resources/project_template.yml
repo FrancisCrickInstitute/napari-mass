@@ -1,7 +1,12 @@
 project:
-  filename: {type: path.save.yaml, function: dialog_project_file, tip: 'Set project file'}
+  filename: {type: path.save.yaml, function: dialog_project_file, edit: False, tip: 'Set project file'}
+  output:
+    folder: {type: path.folder, value: 'mass'}
+    datafile: {type: path.save.yaml_json, value: 'mass.json'}
+    pixel_size: {value: 2um}
 
 input:
+  layers: {value: 'magnet, sample, roi, focus, landmark'}
   source:
     filename: {type: path.open.image}
   bf:
@@ -16,6 +21,7 @@ input:
     max_stitch_offset_um: {value: 50.0}
     flatfield_filename: {type: path.open.image}
     channel: {type: str}
+  load: {type: button, function: load_images}
 
 magnet:
   label: Magnets
@@ -56,8 +62,3 @@ roi:
 
 focus:
   propagate: {type: button, function: propagate_focus, tip: 'Propagate to all sections'}
-
-output:
-  folder: {type: path.folder, function: dialog_output_folder, value: 'mass'}
-  datafile: {type: path.save.yaml_json, function: dialog_output_datafile}
-  pixel_size: {value: 2.27um}

@@ -261,7 +261,10 @@ def get_image(source):
 
 def get_image_at_pixelsize(source, pixel_size_um, render_rgb=False):
     if not isinstance(source, np.ndarray):
-        target_factor = np.mean(get_value_units_micrometer(source.source_pixel_size)[:2]) / np.mean(pixel_size_um[:2])
+        if source.source_pixel_size:
+            target_factor = np.mean(get_value_units_micrometer(source.source_pixel_size)[:2]) / np.mean(pixel_size_um[:2])
+        else:
+            target_factor = 1
         best_level = 0
         best_factor = None
         for level, size in enumerate(source.sizes):

@@ -58,11 +58,11 @@ def normalise_channels(source, image, render_rgb=False):
                 else:
                     channel_values = int2float_image(channel_values)
                 if 'Color' in channel and channel['Color'] != '':
-                    rgba = color_split(channel['Color'], nchannels=4)
+                    rgba = channel['Color']
                 else:
-                    rgba = [255, 255, 255, 255]
-                color = np.divide(rgba[:3], 255, dtype=np.float32)
-                alpha = np.divide(rgba[3], 255, dtype=np.float32)
+                    rgba = [1, 1, 1, 1]
+                color = rgba[:3]
+                alpha = rgba[3]
                 if alpha == 0:
                     alpha = 1
                 new_image += np.atleast_3d(channel_values) * alpha * color

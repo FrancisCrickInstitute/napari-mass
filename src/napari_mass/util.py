@@ -364,15 +364,6 @@ def color_float_to_cv(rgb):
     return int(rgb[2] * 255), int(rgb[1] * 255), int(rgb[0] * 255)
 
 
-def color_split(value, nchannels=0):
-    color = []
-    col = np.uint32(value)
-    while col != 0 or len(color) < nchannels:
-        color.insert(0, np.uint8(col & 255))
-        col //= 256
-    return color
-
-
 def ensure_even(x):
     return x + np.mod(x, 2)
 
@@ -411,12 +402,14 @@ def get_dict_permissive(dct, name):
     return None
 
 
-def get_dict(dct, label):
+def get_dict(dct, label, default=None):
     value = dct
     for sublabel in label.split('.'):
         value = value.get(sublabel)
     if isinstance(value, dict):
         value = value.get('value')
+    if value is None:
+        value = default
     return value
 
 

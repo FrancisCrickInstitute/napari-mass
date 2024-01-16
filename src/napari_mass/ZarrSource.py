@@ -2,6 +2,7 @@ import numpy as np
 import zarr
 from zarr.errors import GroupNotFoundError
 
+from napari_mass.image.color_conversion import hexrgb_to_rgba
 from src.napari_mass.image.normalisation import *
 from src.napari_mass.OmeSource import OmeSource
 
@@ -83,13 +84,12 @@ class ZarrSource(OmeSource):
                 coordinateTransformations = datasets[0].get('coordinateTransformations')
                 if coordinateTransformations is not None:
                     scale1 = coordinateTransformations[0].get('scale', scale1)
-            if 'z' in axes:
-                pixel_size = [
-                    (scale1[axes.index('x')], units[axes.index('x')]),
-                    (scale1[axes.index('y')], units[axes.index('y')]),
-                    (scale1[axes.index('z')], units[axes.index('z')])]
-            else:
-                pixel_size = [(0, ''), (0, ''), (0, '')]
+            for axis in 'xyz':
+                if axis in axes:
+                    index = axes.index(axis)
+                    pixel_size.append((scale1[index], units[index]))
+                else:
+                    pixel_size.append((1, ''))
         nchannels = self.sizes_xyzct[0][3]
         for data in self.metadata.values():
             if isinstance(data, dict):
@@ -97,7 +97,7 @@ class ZarrSource(OmeSource):
                 for channel0 in data.get('channels', []):
                     channel = {'Name': channel0.get('label'), 'SamplesPerPixel': nchannels // n}
                     if 'color' in channel0:
-                        channel['Color'] = channel0['color']
+                        channel['Color'] = hexrgb_to_rgba(channel0['color'])
                     channels.append(channel)
         if len(channels) == 0:
             if nchannels == 3:

@@ -51,19 +51,13 @@ class Imaging:
         self.params = params
         self.debug = True
 
-        input_params = params['input']
-        output_params = params['output']
-        base_folder = os.path.dirname(get_dict(params, 'project.filename'))
-
         log_filename = join_path(validate_out_folder(None, 'log'), 'mass.log')
         # replace millisecond comma with dot:
         log_format = '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s'
         datefmt = '%Y-%m-%d %H:%M:%S'
         logging.basicConfig(level=logging.INFO, format=log_format, datefmt=datefmt,
                             handlers=[logging.StreamHandler(), logging.FileHandler(log_filename)], force=True)
-        logging.info('Logging started')
-
-        self.outfolder = validate_out_folder(base_folder, get_dict(output_params, 'folder'))
+        logging.info('Microscopy Array Section Setup logging started')
 
         self.sections = {}
         self.order = []
@@ -77,20 +71,62 @@ class Imaging:
         self.order_finalised = False
         self.sample_sections_finalised = False
         self.landmarks_finalised = False
+
+    def set_params(self, params):
+        self.params = params
+
+    def init_output(self):
+        logging.info('Initialising output')
+
+        params = self.params
+        output_params = params['project']['output']
+
+        base_folder = os.path.dirname(get_dict(params, 'project.filename'))
+
+        self.outfolder = validate_out_folder(base_folder, get_dict(output_params, 'folder'))
+
+        data_filename = join_path(self.outfolder, get_dict(output_params, 'datafile'))
+        self.data = DataFile(data_filename, load=False)
+
+        matching_filename = join_path(self.outfolder, 'matching.json')
+        self.matches = FileDict(matching_filename, load=False)
+
+        transforms_filename = join_path(self.outfolder, 'transforms.json')
+        self.transforms = FileDict(transforms_filename, load=False)
+
+    def init_layers(self):
+        logging.info('Initialising layers')
+
+        params = self.params
+        input_params = params['input']
+        output_params = params['project']['output']
+
+        self.load_data()
+
+        project_filename = get_dict(params, 'project.filename')
+        if project_filename:
+            base_folder = os.path.dirname(project_filename)
+        else:
+            base_folder = None
+
+        self.output_pixel_size = get_value_units_micrometer(split_value_unit_list(
+                                    get_dict(output_params, 'pixel_size', '2um')))
+
         self.back_images = []
         self.back_images_names = []
         self.back_images_blending = []
 
-        self.output_pixel_size = get_value_units_micrometer(split_value_unit_list(output_params.get('pixel_size', '2um')))
-
         # main image
-        input_filename = input_params.get('source', {}).get('filename')
-        if input_filename is not None:
-            self.source = get_source(base_folder, input_filename)
-            self.small_image = uint8_image(get_image_at_pixelsize(self.source, self.output_pixel_size, render_rgb=True))
+        input_filename = get_dict(input_params, 'source.filename')
+        if input_filename is None or input_filename == '':
+            logging.warning('Source not set')
+            return
+
+        self.source = get_source(base_folder, input_filename)
+        self.small_image = uint8_image(get_image_at_pixelsize(self.source, self.output_pixel_size, render_rgb=True))
 
         # brightfield image
-        self.bf_source = get_source(base_folder, input_params.get('bf'), input_filename)
+        self.bf_source = get_source(base_folder, get_dict(input_params, 'bf'), input_filename)
         if self.bf_source is not None:
             small_image = uint8_image(get_image_at_pixelsize(self.bf_source, self.output_pixel_size, render_rgb=True))
         else:
@@ -101,7 +137,7 @@ class Imaging:
         self.back_images_blending.append('additive')
 
         # fluor image
-        self.fluor_source = get_source(base_folder, input_params.get('fluor'), input_filename)
+        self.fluor_source = get_source(base_folder, get_dict(input_params, 'fluor'), input_filename)
         if self.fluor_source is not None:
             small_image = uint8_image(get_image_at_pixelsize(self.fluor_source, self.output_pixel_size, render_rgb=True))
             self.back_images.append(small_image)
@@ -112,16 +148,17 @@ class Imaging:
 
         # hq fluor image
         hq_params = input_params.get('fluor_hq')
-        if hq_params is not None:
-            tile_path = join_path(base_folder, hq_params['filename'])
-            channel = hq_params.get('channel', '')
+        filename = get_dict(hq_params, 'filename')
+        if filename:
+            tile_path = join_path(base_folder, filename)
+            channel = get_dict(hq_params, 'channel', '')
             tile_filenames = glob.glob(tile_path)
-            flatfield_filename = join_path(base_folder, hq_params['flatfield_filename'])
+            flatfield_filename = join_path(base_folder, get_dict(hq_params, 'flatfield_filename'))
             stitching_filename = join_path(self.outfolder, 'stitching.json')
-            composition_metadata_xml = open(join_path(base_folder, hq_params['metadata']), encoding='utf8').read()
+            composition_metadata_xml = open(join_path(base_folder, get_dict(hq_params, 'metadata')), encoding='utf8').read()
             composition_metadata = xml2dict(composition_metadata_xml)['ExportDocument']['Image']
             self.fluor_hq_source = TiffTileSource(tile_filenames, composition_metadata,
-                                                  max_stitch_offset_um=hq_params['max_stitch_offset_um'],
+                                                  max_stitch_offset_um=get_dict(hq_params, 'max_stitch_offset_um'),
                                                   stitching_filename=stitching_filename,
                                                   channel=channel,
                                                   flatfield_filename=flatfield_filename)
@@ -133,24 +170,40 @@ class Imaging:
             self.fluor_hq_source = self.fluor_source
         self.source_pixel_size = self.fluor_source.get_pixel_size_micrometer()
 
-        self.workflow = params['workflow']
-
-        self.matching_methods = ensure_list(params.get('matching', {}).get('method', 'features'))
-
-        data_filename = join_path(self.outfolder, output_params['datafile'])
-        self.data = DataFile(data_filename, load=False)
-
-        matching_filename = join_path(self.outfolder, 'matching.json')
-        self.matches = FileDict(matching_filename, load=False)
-
-        transforms_filename = join_path(self.outfolder, 'transforms.json')
-        self.transforms = FileDict(transforms_filename, load=False)
-
         self.colors = create_color_table(1000)
-        if 'tsp' in params:
-            self.tsp_solver = ExternalTspSolver(params['tsp'])
-        else:
-            self.tsp_solver = None
+
+        pixel_size = self.output_pixel_size
+        if not isinstance(pixel_size, list):
+            pixel_size = [pixel_size]
+        if len(pixel_size) == 1:
+            pixel_size = list(pixel_size) * 2
+        self.pixel_size = pixel_size[:2]
+
+        # image layers
+        layer_info = [(image, {'name': name, 'blending': blending, 'scale': pixel_size}, 'image')
+                      for image, name, blending
+                      in zip(self.back_images, self.back_images_names, self.back_images_blending)]
+
+        # data layers
+        for layer_name in get_dict(input_params, 'layers', '').split(','):
+            layer_name = layer_name.strip()
+            values0, value_type = self.data.get_values(layer_name)
+            if value_type == 'polygon':
+                layer_type = 'shapes'
+            else:
+                layer_type = 'points'
+
+            values = []
+            properties = {'index': []}
+            if values0 is not None and len(values0) > 0:
+                for index, value in values0.items():
+                    properties['index'].append(index)
+                    values.append(np.flip(value))
+            properties['index'] = np.array(properties['index'], dtype=int)
+
+            layer_info.append((values0, {'name': layer_name, 'properties': properties}, layer_type))
+
+        return layer_info
 
     def magsection_changed(self, section_name, indices):
         if (section_name == 'magnets' or section_name == 'sections') and 'confidence' in self.shape_editor.layer_names:
@@ -208,6 +261,8 @@ class Imaging:
         logging.shutdown()
 
     def process_magnet_sections(self):
+        self.matching_methods = ensure_list(get_dict(self.params, 'matching.method', 'features'))
+
         confidences = []
         detection_params = self.params['mag_detection']
         min_match_rate = detection_params['min_match_rate']
@@ -450,36 +505,10 @@ class Imaging:
         self.sections = self.load_objects(self.data.get_section(SECTIONS_KEY))
         self.matches.load()
         self.transforms.load()
-
-        n_mag_sections = 0
-        n_sample_sections = 0
-        n_rois = 0
-        n_focus = 0
-        for element in self.sections.values():
-            if 'magnet' in element:
-                n_mag_sections += 1
-            if 'sample' in element:
-                n_sample_sections += 1
-            if 'rois' in element:
-                n_rois += 1
-            if 'focus' in element:
-                n_focus += 1
-
-        if 'magnets' in self.workflow:
-            self.magsections_finalised = (n_mag_sections > 0)
-            logging.info(f'mag section definition done: {self.magsections_finalised}')
-        if 'samples' in self.workflow:
-            self.sample_sections_finalised = (n_sample_sections > 0)
-            logging.info(f'sample section definition done: {self.sample_sections_finalised}')
         self.order = self.data.get_section('serial_order').get('order', [])
         self.order_confidences = self.data.get_section('serial_order').get(CONFIDENCE_SUBKEY, [])
-        self.order_finalised = (len(self.order) > 0)
         self.stage_order = self.data.get_section('stage_order').get('order', [])
-        logging.info(f'section ordering done: {self.order_finalised}')
-        if 'landmarks' in self.workflow:
-            self.landmarks = {index: Point(value['source']) for index, value in self.data.get_section('landmarks').items()}
-            self.landmarks_finalised = (len(self.landmarks) > 0)
-            logging.info(f'landmark definition done: {self.landmarks_finalised}')
+        self.landmarks = {index: Point(value['source']) for index, value in self.data.get_section('landmarks').items()}
 
     def check_init_magsections(self, get_features=False):
         if not self.magsections_initialised:
@@ -579,18 +608,20 @@ class Imaging:
 
     def order_magsections(self):
         logging.info('MagSec ordering')
+
         norm_score_matrix_1 = 1 - self.norm_score_matrix
         score_matrix_1_int = (np.max(self.score_matrix) - self.score_matrix).astype(int)
         logging.info('tsp_solver.greedy')
         self.order = norm_order(solve_tsp(norm_score_matrix_1, optim_steps=10))
         confidences, _, _, _, _ = self.check_order(self.order)
 
-        if self.tsp_solver is not None:
+        tsp_params = self.params.get('tsp')
+        if tsp_params is not None:
+            tsp_solver = ExternalTspSolver(tsp_params)
             logging.info('concorde')
-            self.check_order(norm_order(self.tsp_solver.solve_tsp_concorde(score_matrix_1_int)))
-
+            self.check_order(norm_order(tsp_solver.solve_tsp_concorde(score_matrix_1_int)))
             logging.info('LKH')
-            self.check_order(norm_order(self.tsp_solver.solve_tsp_lkh(score_matrix_1_int)))
+            self.check_order(norm_order(tsp_solver.solve_tsp_lkh(score_matrix_1_int)))
 
         self.order_confidences = confidences
         return confidences

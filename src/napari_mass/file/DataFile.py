@@ -24,51 +24,8 @@ class DataFile(FileDict):
         super().__init__(filename, load)
         if self == {}:
             self[CREATED_KEY] = str(datetime.now())
-            self[SOURCE_KEY] = NAME
+            self[SOURCE_KEY] = NAME + ' ' + VERSION
             self[SECTIONS_KEY] = {}
-
-    def import_magc(self, magc_filename):
-        filter_keys = ['number', 'compression', 'area', 'template']
-        magc = MagcFile(magc_filename)
-        magc.load()
-        old_dict = magc.to_dict_implicit(search_plural=True, filter_keys=filter_keys, reshape_coordinates=True)
-        self.convert_old(old_dict)
-
-    def import_old(self, old_filename):
-        old_dict = DataFile(old_filename, load=True)
-        self.dims = old_dict.get('magnets', {}).get('dims')
-        self.convert_old(old_dict)
-
-    def convert_old(self, old_dict):
-        sections = self[SECTIONS_KEY]
-        for key, contents in old_dict.items():
-
-            if key == 'sections':
-                key = 'sample'
-            if key == 'magnets':
-                key = 'magnet'
-            if key == 'roi':
-                key = 'rois'
-            if key == 'serialorder':
-                key = 'serial_order'
-            if key == 'tsporder':
-                key = 'stage_order'
-
-            if key == 'landmarks':
-                self[key] = {index: {'source': value} for index, value in contents.items()}
-            elif key in ['serial_order', 'stage_order']:
-                self[key] = contents[next(iter(contents))]
-            else:
-                for index, value in contents.items():
-                    if index not in sections:
-                        sections[index] = {}
-                    if key == 'magnet' and 'location' in value:
-                        value = {'polygon': [value['location']]}
-                    elif key == 'focus' and 'polygon' in value:
-                        value = {index: {'location': point} for index, point in enumerate(value['polygon'])}
-                    elif key == 'rois' and isinstance(next(iter(value)), str):
-                        value = {0: value}
-                    sections[index][key] = value
 
     def get_section(self, section_name, default_value={}):
         return self.get(section_name, default_value)
@@ -128,10 +85,3 @@ class DataFile(FileDict):
         self[SECTIONS_KEY][index].pop(section_name, None)
         if self[SECTIONS_KEY][index] == {}:
             self[SECTIONS_KEY].pop(index, None)
-
-
-if __name__ == '__main__':
-    data = DataFile('../SBEMimage/array/example/wafer_example1.json', load=False)
-    data.import_magc('../SBEMimage/array/example/wafer_example1.magc')
-    #data.import_old('../annotated_old.yml')
-    data.save()

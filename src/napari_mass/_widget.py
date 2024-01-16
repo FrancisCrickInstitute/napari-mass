@@ -5,9 +5,9 @@
 
 
 import napari
+from napari.layers import Layer
 from napari.qt import QtViewer
 from napari.components.viewer_model import ViewerModel
-import numpy as np
 import os
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import *
@@ -23,7 +23,7 @@ def get_reader(path):
     ext = os.path.splitext(path)[1]
 
     if ext in READER_SUPPORTED_TYPES:
-        return widget.load_dropped_image
+        return widget.image_dropped
     return None
 
 
@@ -31,6 +31,7 @@ class QtViewerModelWrap(QtViewer):
     def __init__(self, main_viewer, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.main_viewer = main_viewer
+        self.setAcceptDrops(False)  # do not accept file drop
 
 
 class ParamControl:
@@ -75,17 +76,11 @@ class MassWidget(QSplitter):
         global widget
         widget = self
 
-        self.imaging = None
         self.clear_controls()
         self.viewer = napari_viewer
 
         self.viewer_model = ViewerModel()
         self.detail_viewer = QtViewerModelWrap(self.viewer, self.viewer_model)
-
-        #self.viewer.window.qt_viewer.dropEvent = self.viewer_dropped
-        #self.viewer.layers.events.inserted.connect(self.viewer_dropped)
-
-        #self.viewer_model.add_points([(0,0), (0,100), (100,0), (100,100)], name='test_layer')
 
         self.params_widget = self.create_widgets_from_template(PROJECT_TEMPLATE)
         self.setOrientation(Qt.Vertical)
@@ -93,34 +88,41 @@ class MassWidget(QSplitter):
         self.addWidget(self.detail_viewer)
         self.setMaximumWidth(300)   # only way found to limit detail_viewer initial width
 
-        self.set_project(False)
+        self.set_project(False, 0)
+        self.init_imaging()
 
-    def set_project(self, set):
+    def set_project(self, set, tabs_enable=None):
         self.project_set = set
-        for i in range(self.params_widget.count())[1:]:
-            self.params_widget.setTabEnabled(i, set)
+        for index in range(self.params_widget.count()):
+            if tabs_enable is not None:
+                set0 = (index <= tabs_enable)
+            else:
+                set0 = set
+            self.params_widget.setTabEnabled(index, set0)
 
     def init_imaging(self):
-        if self.project_set:
-            from napari_mass.Imaging import Imaging
-            self.imaging = Imaging(self.params)
+        from napari_mass.Imaging import Imaging
+        self.imaging = Imaging(self.params)
 
-    def load_dropped_image(self, path):
+    def image_dropped(self, path):
         self.all_widgets['input.source.filename'].setText(path)
-        layers = [(np.zeros([1000, 1000, 3]), {}, 'image')]
-        return layers
+        self.viewer.layers.clear()
+        return self.imaging.init_layers()
 
     def clear_controls(self):
         self.all_widgets = {}
         self.param_controls = {}
         self.path_controls = {}
+        self.tab_index = 0
 
     def create_widgets_from_template(self, path):
         with open(path, 'r') as infile:
             self.params = yaml.load(infile, Loader=yaml.Loader)
+        self.tab_names = []
         tab_widget = QTabWidget()
         for label0, section_dict in self.params.items():
             tip = None
+            self.tab_names.append(label0)
             label = label0.replace('_', ' ').capitalize()
             if 'label' in section_dict:
                 label = section_dict.pop('label')
@@ -131,7 +133,28 @@ class MassWidget(QSplitter):
             if tip is not None:
                 widget.settabText(tip)
             tab_widget.addTab(widget, label)
+            tab_widget.currentChanged.connect(self.tab_changed)
         return tab_widget
+
+    def tab_changed(self, new_index):
+        if new_index != self.tab_index:
+            if self.tab_index == 0:
+                self.imaging.init_output()
+            if self.viewer.layers:
+                current_tab = self.tab_names[new_index]
+                if current_tab in self.layer_names:
+                    index = self.layer_names.index(current_tab)
+                    self.viewer.layers.selection.active = self.viewer.layers[index]
+            self.tab_index = new_index
+
+    def layer_changed(self, event):
+        new_selection = list(event.added)
+        if len(new_selection) > 0:
+            layer_name = new_selection[0].name
+            if layer_name in self.tab_names:
+                index = self.tab_names.index(layer_name)
+                self.tab_index = index  # prevent event loop
+                self.params_widget.setCurrentIndex(index)   # does not seem to redraw tab
 
     def create_params_widget(self, param_prefix, template_dict):
         widget = QWidget()
@@ -208,6 +231,9 @@ class MassWidget(QSplitter):
                 layout.addWidget(path_control.get_button_widget(), i, 2)
                 self.path_controls[param_label] = path_control
 
+            if 'edit' in template and not template['edit']:
+                var_widget.setReadOnly(True)
+
         #layout.setContentsMargins(0, 0, 0, 0)  # Tighten up margins
         widget.setLayout(layout)
         return widget
@@ -223,22 +249,25 @@ class MassWidget(QSplitter):
                 yaml.dump(self.params, outfile, default_flow_style=None, sort_keys=False)
 
     def dialog_project_file(self, path):
-        self.set_project(True)
+        self.set_project(True, 1)   # TODO: fix: should only enable tab 0 and 1!
         if os.path.exists(path):
             self.clear_controls()
             self.replaceWidget(0, self.create_widgets_from_template(path))
             self.all_widgets['project.filename'].setText(path)
         else:
             self.save_params()
-        self.init_imaging()
+        self.imaging.set_params(self.params)
 
-    def dialog_output_folder(self, path):
-        print(path)
-
-    def dialog_output_datafile(self, path):
-        print(path)
-
-
+    def load_images(self):
+        self.viewer.layers.clear()
+        layer_infos = self.imaging.init_layers()
+        self.layer_names = []
+        for layer_info in layer_infos:
+            layer = Layer.create(*layer_info)
+            self.viewer.layers.selection.events.changed.connect(self.layer_changed)
+            self.viewer.add_layer(layer)
+            self.layer_names.append(layer_info[1]['name'])
+        self.set_project(True)
 
     def detect_magnets(self):
         pass

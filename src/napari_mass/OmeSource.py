@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 
+from napari_mass.image.color_conversion import int_to_rgba
 from src.napari_mass.image.util import image_resize_fast, image_resize, precise_resize, image_reshape
 from src.napari_mass.util import check_round_significants, ensure_list, get_value_units_micrometer
 
@@ -78,6 +79,8 @@ class OmeSource:
         for channel0 in ensure_list(pixels.get('Channel', [])):
             channel = channel0.copy()
             channel['SamplesPerPixel'] = int(channel['SamplesPerPixel'])
+            if channel0.get('Color') is not None:
+                channel['Color'] = int_to_rgba(int(channel0['Color']))
             channels.append(channel)
         if len(channels) == 0:
             if nchannels == 3:
