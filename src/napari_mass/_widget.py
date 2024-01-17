@@ -14,6 +14,7 @@ from qtpy.QtWidgets import *
 import yaml
 
 from napari_mass.parameters import *
+from napari_mass.util import get_dict
 
 
 def get_reader(path):
@@ -50,6 +51,8 @@ class ParamControl:
 
 
 class PathControl:
+    FOLDER_PLACEHOLDER = '[this folder]'
+
     def __init__(self, template, path_widget, function=None):
         self.path_widget = path_widget
         self.template = template
@@ -63,8 +66,69 @@ class PathControl:
 
     def show_dialog(self):
         value = self.path_widget.text()
-        result = path_dialog(self.path_type, value, caption=self.template.get('tip'))
+        types = self.path_type.split('.')[1:]
+        dialog_type = types[0].lower()
+        caption = self.template.get('tip')
+
+        if caption is None:
+            caption = ' '.join(types).capitalize()
+
+        filter = ''
+        default_ext = None
+        if len(types) > 1:
+            file_type = types[1]
+            if file_type.startswith('image'):
+                filter += 'Images (*.tif *.tiff *.zarr);;'
+                default_ext = '.tif'
+            if 'json' in file_type:
+                filter += 'JSON files (*.json);;'
+                if default_ext is None:
+                    default_ext = '.json'
+            if 'yml' in file_type or 'yaml' in file_type:
+                filter += 'YAML files (*.yml *.yaml);;'
+                if default_ext is None:
+                    default_ext = '.yml'
+            if 'xml' in file_type:
+                filter += 'XML files (*.xml);;'
+                if default_ext is None:
+                    default_ext = '.xml'
+        self.default_ext = default_ext
+
+        self.is_folder = False
+        if dialog_type in ['folder', 'dir', 'directory']:
+            self.is_folder = True
+            result = QFileDialog.getExistingDirectory(
+                caption=caption, directory=value
+            )
+            self.finish_result(result)
+        elif dialog_type == 'save':
+            result = QFileDialog.getSaveFileName(
+                caption=caption, directory=value, filter=filter
+            )
+            self.finish_result(result[0])
+        else:
+            if 'zarr' in filter:
+                value = os.path.join(value, self.FOLDER_PLACEHOLDER)
+            self.dialog = QFileDialog(caption=caption, directory=value, filter=filter)
+            self.dialog.accepted.connect(self.accept)
+            self.dialog.exec()
+
+    def accept(self):
+        files = self.dialog.selectedFiles()
+        if files:
+            filename = files[0]
+        else:
+            filename = None
+        if filename.endswith(self.FOLDER_PLACEHOLDER):
+            filename = filename.replace('[this folder]', '')
+            filename = filename.rstrip('/\\')
+            self.is_folder = True
+        self.finish_result(filename)
+
+    def finish_result(self, result):
         if result is not None:
+            if not self.is_folder and os.path.splitext(result)[1] == '':
+                result += self.default_ext
             self.path_widget.setText(result)
             if self.function is not None:
                 self.function(result)
@@ -76,38 +140,43 @@ class MassWidget(QSplitter):
         global widget
         widget = self
 
+        self.project_set = False
         self.clear_controls()
+        self.load_params(PROJECT_TEMPLATE)
+        self.init_model()
         self.viewer = napari_viewer
 
         self.viewer_model = ViewerModel()
         self.detail_viewer = QtViewerModelWrap(self.viewer, self.viewer_model)
 
-        self.params_widget = self.create_widgets_from_template(PROJECT_TEMPLATE)
+        self.params_widget = self.create_widgets()
         self.setOrientation(Qt.Vertical)
         self.addWidget(self.params_widget)
         self.addWidget(self.detail_viewer)
         self.setMaximumWidth(300)   # only way found to limit detail_viewer initial width
 
-        self.set_project(False, 0)
-        self.init_imaging()
+        self.enable_tabs(False, 1)
 
-    def set_project(self, set, tabs_enable=None):
-        self.project_set = set
-        for index in range(self.params_widget.count()):
-            if tabs_enable is not None:
-                set0 = (index <= tabs_enable)
-            else:
-                set0 = set
-            self.params_widget.setTabEnabled(index, set0)
-
-    def init_imaging(self):
-        from napari_mass.Imaging import Imaging
-        self.imaging = Imaging(self.params)
+    def init_model(self):
+        from napari_mass.DataModel import DataModel
+        self.model = DataModel(self.params)
 
     def image_dropped(self, path):
         self.all_widgets['input.source.filename'].setText(path)
+        return self.init_layers()
+
+    def init_layers(self):
         self.viewer.layers.clear()
-        return self.imaging.init_layers()
+        layer_infos = self.model.init_layers()
+        self.layer_names = []
+        if layer_infos:
+            for layer_info in layer_infos:
+                self.layer_names.append(layer_info[1]['name'])
+            self.viewer.layers.selection.clear()
+            self.viewer.layers.selection.events.changed.connect(self.layer_changed)
+            self.viewer.layers.events.inserted.connect(self.layer_added)
+        self.enable_tabs()
+        return layer_infos
 
     def clear_controls(self):
         self.all_widgets = {}
@@ -115,9 +184,11 @@ class MassWidget(QSplitter):
         self.path_controls = {}
         self.tab_index = 0
 
-    def create_widgets_from_template(self, path):
+    def load_params(self, path):
         with open(path, 'r') as infile:
             self.params = yaml.load(infile, Loader=yaml.Loader)
+
+    def create_widgets(self):
         self.tab_names = []
         tab_widget = QTabWidget()
         for label0, section_dict in self.params.items():
@@ -136,25 +207,38 @@ class MassWidget(QSplitter):
             tab_widget.currentChanged.connect(self.tab_changed)
         return tab_widget
 
+    def layer_added(self, event):
+        data_layer_names = get_dict(self.params, 'input.layers')
+        layer = event.value
+        if layer.name in data_layer_names:
+            layer.events.data.connect(self.layer_data_changed)
+
+    def layer_data_changed(self, event):
+        print(event.source.name, event.action, event.data_indices, event.value)
+
     def tab_changed(self, new_index):
         if new_index != self.tab_index:
             if self.tab_index == 0:
-                self.imaging.init_output()
+                self.model.init_output()
             if self.viewer.layers:
                 current_tab = self.tab_names[new_index]
                 if current_tab in self.layer_names:
                     index = self.layer_names.index(current_tab)
-                    self.viewer.layers.selection.active = self.viewer.layers[index]
+                else:
+                    index = 0
+                self.viewer.layers.selection.active = self.viewer.layers[index]
             self.tab_index = new_index
 
     def layer_changed(self, event):
+        # also triggered when new layer added (and auto-selected)
+        index = 1
         new_selection = list(event.added)
         if len(new_selection) > 0:
             layer_name = new_selection[0].name
             if layer_name in self.tab_names:
                 index = self.tab_names.index(layer_name)
-                self.tab_index = index  # prevent event loop
-                self.params_widget.setCurrentIndex(index)   # does not seem to redraw tab
+            self.tab_index = index  # prevent event loop
+            self.params_widget.setCurrentIndex(index)
 
     def create_params_widget(self, param_prefix, template_dict):
         widget = QWidget()
@@ -238,9 +322,10 @@ class MassWidget(QSplitter):
         widget.setLayout(layout)
         return widget
 
-    def enable_tabs(self):
-        for i in range(self.params_widget.count())[1:]:
-            self.params_widget.setTabEnabled(i, True)
+    def enable_tabs(self, set=True, tab_index=-1):
+        for index in range(self.params_widget.count()):
+            if (set and (tab_index < 0 or index <= tab_index)) or (not set and index >= tab_index):
+                self.params_widget.setTabEnabled(index, set)
 
     def save_params(self):
         if self.project_set:
@@ -249,25 +334,27 @@ class MassWidget(QSplitter):
                 yaml.dump(self.params, outfile, default_flow_style=None, sort_keys=False)
 
     def dialog_project_file(self, path):
-        self.set_project(True, 1)   # TODO: fix: should only enable tab 0 and 1!
+        self.project_set = True
         if os.path.exists(path):
             self.clear_controls()
-            self.replaceWidget(0, self.create_widgets_from_template(path))
+            self.load_params(path)
+            self.params_widget = self.create_widgets()
+            self.replaceWidget(0, self.params_widget)
+            self.enable_tabs(False, 2)
             self.all_widgets['project.filename'].setText(path)
         else:
             self.save_params()
-        self.imaging.set_params(self.params)
+        self.enable_tabs(tab_index=1)
+        self.model.set_params(self.params)
 
-    def load_images(self):
-        self.viewer.layers.clear()
-        layer_infos = self.imaging.init_layers()
-        self.layer_names = []
-        for layer_info in layer_infos:
-            layer = Layer.create(*layer_info)
-            self.viewer.layers.selection.events.changed.connect(self.layer_changed)
-            self.viewer.add_layer(layer)
-            self.layer_names.append(layer_info[1]['name'])
-        self.set_project(True)
+    def create_layers(self):
+        layer_infos = self.init_layers()
+        if layer_infos:
+            for layer_info in layer_infos:
+                layer = Layer.create(*layer_info)
+                self.viewer.add_layer(layer)
+        else:
+            QMessageBox.warning(self, 'Source input', 'No source image loaded')
 
     def detect_magnets(self):
         pass
@@ -292,44 +379,6 @@ class MassWidget(QSplitter):
 
     def propagate_focus(self):
         pass
-
-
-def path_dialog(dialog_type, value, caption=None):
-    types = dialog_type.split('.')[1:]
-    dialog_type = types[0].lower()
-
-    if caption is None:
-        caption = ' '.join(types).capitalize()
-
-    filter = ''
-    if len(types) > 1:
-        file_type = types[1]
-        if file_type.startswith('image'):
-            filter += 'Images (*.tif *.tiff *.zarr);;'
-        if 'json' in file_type:
-            filter += 'JSON files (*.json);;'
-        if 'yml' in file_type or 'yaml' in file_type:
-            filter += 'YAML files (*.yml *.yaml);;'
-        if 'xml' in file_type:
-            filter += 'XML files (*.xml);;'
-
-    if dialog_type in ['folder', 'dir', 'directory']:
-        result = QFileDialog.getExistingDirectory(
-            caption=caption, directory=value
-        )
-    elif dialog_type in ['save', 'set']:
-        result = QFileDialog.getSaveFileName(
-            caption=caption, directory=value, filter=filter
-        )
-        result = result[0]
-    else:
-        result = QFileDialog.getOpenFileName(
-            caption=caption, directory=value, filter=filter
-        )
-        result = result[0]
-    if result == '':
-        result = None
-    return result
 
 
 widget: MassWidget

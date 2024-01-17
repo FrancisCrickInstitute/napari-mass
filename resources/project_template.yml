@@ -1,12 +1,12 @@
 project:
-  filename: {type: path.save.yaml, function: dialog_project_file, edit: False, tip: 'Set project file'}
+  filename: {type: path.set.yaml, function: dialog_project_file, edit: False, tip: 'Set project file'}
   output:
     folder: {type: path.folder, value: 'mass'}
     datafile: {type: path.save.yaml_json, value: 'mass.json'}
     pixel_size: {value: 2um}
 
 input:
-  layers: {value: 'magnet, sample, roi, focus, landmark'}
+  layers: {value: 'magnet, sample, rois, focus, landmarks'}
   source:
     filename: {type: path.open.image}
   bf:
@@ -21,10 +21,9 @@ input:
     max_stitch_offset_um: {value: 50.0}
     flatfield_filename: {type: path.open.image}
     channel: {type: str}
-  load: {type: button, function: load_images}
+  initialise_layers: {type: button, function: create_layers}
 
 magnet:
-  label: Magnets
   pixel_size: {value: 12um}
   shape: {value: 5}
   size_range_um: {value: '1, 5'}
@@ -38,7 +37,6 @@ magnet:
   order: {type: button, function: order_magnets, tip: 'Automatic section Z stack ordering'}
 
 sample:
-  label: Sample
   pixel_size: {value: 12um}
   shape: {value: 4}
   min_match_rate: {value: 0.5}
@@ -49,8 +47,7 @@ sample:
   copy: {type: button, function: copy_sample, tip: 'Copy selected section, click view to paste'}
   propagate: {type: button, function: propagate_sample, tip: 'Propagate to all sections'}
 
-roi:
-  label: ROIs
+rois:
   sigma: {value: 8.0}
   min_cell_diameter: {value: 30.0}
   max_cell_diameter: {value: 90.0}

@@ -46,7 +46,7 @@ from src.napari_mass.image.util import *
 from src.napari_mass.util import *
 
 
-class Imaging:
+class DataModel:
     def __init__(self, params):
         self.params = params
         self.debug = True
