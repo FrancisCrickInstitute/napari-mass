@@ -77,11 +77,23 @@ class DataFile(FileDict):
             value = value.tolist()
         if top_level not in self:
             self[top_level] = {}
+        if index < 0:
+            # added: get best new index
+            index = 0
+            while index in self[top_level] and section_name in self[top_level][index]:
+                index += 1
         if index not in self[top_level]:
             self[top_level][index] = {}
         self[top_level][index][section_name] = value
 
-    def remove_value(self, section_name, index):
-        self[SECTIONS_KEY][index].pop(section_name, None)
-        if self[SECTIONS_KEY][index] == {}:
-            self[SECTIONS_KEY].pop(index, None)
+    def remove_value(self, section_name, index, top_level=SECTIONS_KEY):
+        self[top_level][index].pop(section_name, None)
+        if self[top_level][index] == {}:
+            # no section contents -> remove index
+            self[top_level].pop(index, None)
+            # collapse empty section
+            if len(self[top_level]) > 0:
+                max_key = max(self[top_level].keys())
+                for key in range(index + 1, max_key + 1):
+                    if key in self[top_level]:
+                        self[top_level][key - 1] = self[top_level].pop(key)

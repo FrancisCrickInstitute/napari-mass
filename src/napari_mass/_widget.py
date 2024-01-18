@@ -176,6 +176,7 @@ class MassWidget(QSplitter):
             self.viewer.layers.selection.events.changed.connect(self.layer_changed)
             self.viewer.layers.events.inserted.connect(self.layer_added)
         self.enable_tabs()
+        self.check_enabled_layers()
         return layer_infos
 
     def clear_controls(self):
@@ -214,12 +215,15 @@ class MassWidget(QSplitter):
             layer.events.data.connect(self.layer_data_changed)
 
     def layer_data_changed(self, event):
-        print(event.source.name, event.action, event.data_indices, event.value)
+        #print(event.source.name, event.action, event.data_indices, event.value)
+        self.model.data_changed(event.source.name, event.action, event.data_indices, event.value)
 
     def tab_changed(self, new_index):
         if new_index != self.tab_index:
             if self.tab_index == 0:
                 self.model.init_output()
+            if self.tab_index == 1:
+                self.check_enabled_layers()
             if self.viewer.layers:
                 current_tab = self.tab_names[new_index]
                 if current_tab in self.layer_names:
@@ -239,6 +243,12 @@ class MassWidget(QSplitter):
                 index = self.tab_names.index(layer_name)
             self.tab_index = index  # prevent event loop
             self.params_widget.setCurrentIndex(index)
+
+    def check_enabled_layers(self):
+        for index, name in enumerate(self.tab_names):
+            if index > 1:
+                enabled = (name in get_dict(self.params, 'input.layers'))
+                self.params_widget.setTabEnabled(index, enabled)
 
     def create_params_widget(self, param_prefix, template_dict):
         widget = QWidget()

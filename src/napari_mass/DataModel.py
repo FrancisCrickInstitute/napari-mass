@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import cv2 as cv
 import glob
 import logging
+from napari.layers.base import ActionType
 import numpy as np
 import os.path
 from sklearn.metrics import euclidean_distances
@@ -47,6 +48,16 @@ from src.napari_mass.util import *
 
 
 class DataModel:
+    LAYER_COLORS = {
+        'magnet': 'limegreen',
+        'sample': 'cyan',
+        'roi': 'yellow',
+        'focus': 'red',
+        'landmark': 'blue'
+    }
+
+    SHAPE_THICKNESS = 20
+
     def __init__(self, params):
         self.params = params
         self.debug = True
@@ -192,18 +203,39 @@ class DataModel:
                 layer_type = 'shapes'
             else:
                 layer_type = 'points'
+            layer_color = get_dict_permissive(self.LAYER_COLORS, layer_name)
 
             values = []
-            properties = {'index': []}
-            if values0 is not None and len(values0) > 0:
-                for index, value in values0.items():
-                    properties['index'].append(index)
-                    values.append(np.flip(value))
-            properties['index'] = np.array(properties['index'], dtype=int)
+            if values0:
+                values = [np.flip(value) for value in values0.values()]
 
-            layer_info.append((values0, {'name': layer_name, 'properties': properties}, layer_type))
+            metadata = {'name': layer_name,
+                        'face_color': 'transparent', 'edge_color': layer_color,
+                        'edge_width': self.SHAPE_THICKNESS}
+            if layer_type == 'points':
+                metadata['edge_width_is_relative'] = False
+            else:
+                metadata['shape_type'] = 'polygon'
+            layer_info.append((values, metadata, layer_type))
 
         return layer_info
+
+    def data_changed(self, name, action, indices, values):
+        modified = False
+        top_level = SECTIONS_KEY
+        if name == 'landmarks':
+            top_level = name
+            name = 'source'
+        for index in indices:
+            if action == ActionType.ADDED or action == ActionType.CHANGED:
+                value = np.flip(values[index])
+                self.data.set_sections_value(name, index, value, top_level=top_level)
+                modified = True
+            elif action == ActionType.REMOVED:
+                self.data.remove_value(name, index, top_level=top_level)
+                modified = True
+        if modified:
+            self.data.save()
 
     def magsection_changed(self, section_name, indices):
         if (section_name == 'magnets' or section_name == 'sections') and 'confidence' in self.shape_editor.layer_names:

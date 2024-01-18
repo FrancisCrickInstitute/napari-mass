@@ -491,6 +491,30 @@ def add_dict_tree(metadata, keys, value):
         metadata[key] = value
 
 
+def dict_keys_to_string(data0):
+    if isinstance(data0, dict):
+        data = {}
+        for key, value in data0.items():
+            if isinstance(key, int):
+                key = str(key)
+            data[key] = value
+    else:
+        data = data0
+    return data
+
+
+def dict_keys_to_int(data0):
+    if isinstance(data0, dict):
+        data = {}
+        for key, value in data0.items():
+            if key.isnumeric():
+                key = int(key)
+            data[key] = value
+    else:
+        data = data0
+    return data
+
+
 def split_num_text(text):
     num_texts = []
     block = ''

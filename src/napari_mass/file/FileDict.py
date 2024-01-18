@@ -2,6 +2,8 @@ import json
 import os
 import yaml
 
+from napari_mass.util import *
+
 
 class FileDict(dict):
     def __init__(self, filename=None, load=True):
@@ -15,7 +17,7 @@ class FileDict(dict):
             ext = os.path.splitext(self.filename)[-1].lower()
             with open(self.filename, 'r') as infile:
                 if ext == '.json':
-                    dct = json.load(infile, object_hook=json_keys_to_int)
+                    dct = dict_keys_to_int(json.load(infile, object_hook=json_keys_to_int))
                 else:
                     dct = yaml.load(infile, Loader=yaml.Loader)
                 self.update(dct)
@@ -30,7 +32,7 @@ class FileDict(dict):
                 dct = sorted(dct.items(), key=lambda x: tuple(map(int, x[0].split('_'))))
             with open(self.filename, 'w') as outfile:
                 if ext == '.json':
-                    json.dump(dct, outfile, indent=4)
+                    json.dump(dict_keys_to_string(dct), outfile, indent=4)
                 else:
                     yaml.dump(dct, outfile, default_flow_style=None, sort_keys=False)
 
