@@ -14,7 +14,7 @@ from qtpy.QtWidgets import *
 import yaml
 
 from napari_mass.parameters import *
-from napari_mass.util import get_dict
+from napari_mass.util import get_dict, translate
 
 
 def get_reader(path):
@@ -145,6 +145,10 @@ class MassWidget(QSplitter):
         self.load_params(PROJECT_TEMPLATE)
         self.init_model()
         self.viewer = napari_viewer
+        self.copied_shape = None
+        self.shape_copy_mode = False
+        self.shape_copy_layer = None
+        self.shape_snap_edges = False
 
         self.viewer_model = ViewerModel()
         self.detail_viewer = QtViewerModelWrap(self.viewer, self.viewer_model)
@@ -214,6 +218,20 @@ class MassWidget(QSplitter):
         if layer.name in data_layer_names:
             layer.events.data.connect(self.layer_data_changed)
 
+            @layer.mouse_drag_callbacks.append
+            def click_drag(layer, event):
+                self.layer_clicked(layer, event)
+                yield
+
+    def layer_clicked(self, layer, event):
+        position = event.position
+        if self.shape_copy_mode and layer.name == self.shape_copy_layer:
+            value = translate(self.copied_shape, position)
+            #if self.shape_snap_edges:
+            #    value = np.flip(self.on_paste_function(np.flip(value)))
+            layer.add(value)
+            self.shape_copy_mode = False
+
     def layer_data_changed(self, event):
         #print(event.source.name, event.action, event.data_indices, event.value)
         self.model.data_changed(event.source.name, event.action, event.data_indices, event.value)
@@ -243,6 +261,7 @@ class MassWidget(QSplitter):
                 index = self.tab_names.index(layer_name)
             self.tab_index = index  # prevent event loop
             self.params_widget.setCurrentIndex(index)
+        self.shape_copy_mode = False
 
     def check_enabled_layers(self):
         for index, name in enumerate(self.tab_names):
@@ -379,7 +398,15 @@ class MassWidget(QSplitter):
         pass
 
     def copy_sample(self):
-        pass
+        shape_copy_layer = 'sample'
+        if shape_copy_layer in self.layer_names:
+            layer_index = self.layer_names.index(shape_copy_layer)
+            layer = self.viewer.layers[layer_index]
+            selection = list(layer.selected_data)
+            if len(selection) > 0:
+                self.copied_shape = layer.data[selection[0]]
+                self.shape_copy_mode = True
+                self.shape_copy_layer = shape_copy_layer
 
     def propagate_sample(self):
         pass

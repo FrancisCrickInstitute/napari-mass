@@ -182,6 +182,10 @@ def calc_peak(data):
     return peak
 
 
+def translate(data, new_center):
+    return data - np.mean(data, 0) + new_center
+
+
 def create_transform(center=(0, 0), angle=0, scale=1, translate=(0, 0), create3x3=False):
     transform = cv.getRotationMatrix2D(center, angle, scale)
     transform[:, 2] += translate

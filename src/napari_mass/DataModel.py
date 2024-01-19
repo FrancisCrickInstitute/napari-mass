@@ -221,18 +221,27 @@ class DataModel:
         return layer_info
 
     def data_changed(self, name, action, indices, values):
+        # * TODO: if no CHANGED event emitted from points layer, trigger on CHANGING as well (for points layers)
         modified = False
-        top_level = SECTIONS_KEY
+        keys = []
         if name == 'landmarks':
             top_level = name
             name = 'source'
+            if top_level in self.data:
+                keys = list(self.data[top_level].keys())
+        else:
+            top_level = SECTIONS_KEY
+            if top_level in self.data:
+                keys = [key for key, value in self.data[top_level].items() if name in value]
+        keys += [-1]    # propagate index: -1
         for index in indices:
+            key = keys[index]
             if action == ActionType.ADDED or action == ActionType.CHANGED:
                 value = np.flip(values[index])
-                self.data.set_sections_value(name, index, value, top_level=top_level)
+                self.data.set_sections_value(name, key, value, top_level=top_level)
                 modified = True
             elif action == ActionType.REMOVED:
-                self.data.remove_value(name, index, top_level=top_level)
+                self.data.remove_value(name, key, top_level=top_level)
                 modified = True
         if modified:
             self.data.save()
