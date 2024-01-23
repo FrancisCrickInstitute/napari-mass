@@ -13,7 +13,7 @@ from skimage.segmentation import watershed
 import tifffile
 from tifffile import TiffWriter, TiffFile
 
-from src.napari_mass.util import *
+from napari_mass.util import *
 
 
 mpl.rcParams['figure.dpi'] = 600

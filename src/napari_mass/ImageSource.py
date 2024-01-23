@@ -1,7 +1,7 @@
 import numpy as np
 
-from src.napari_mass.image.normalisation import *
-from src.napari_mass.TiffSource import TiffSource
+from napari_mass.image.normalisation import *
+from napari_mass.TiffSource import TiffSource
 
 
 class ImageSource(TiffSource):

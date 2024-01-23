@@ -8,9 +8,9 @@ import tifffile
 from tifffile import TiffFile, TiffPage
 from concurrent.futures import ThreadPoolExecutor
 
-from src.napari_mass.OmeSource import OmeSource
-from src.napari_mass.image.util import get_tiff_pages
-from src.napari_mass.util import tags_to_dict, desc_to_dict
+from napari_mass.OmeSource import OmeSource
+from napari_mass.image.util import get_tiff_pages
+from napari_mass.util import tags_to_dict, desc_to_dict
 
 
 class TiffSource(OmeSource):

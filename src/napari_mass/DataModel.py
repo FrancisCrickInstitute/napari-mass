@@ -30,21 +30,21 @@ from tifffile import xml2dict
 from tsp_solver.greedy import solve_tsp
 from tqdm import tqdm
 
-from src.napari_mass.file.FileDict import FileDict
-from src.napari_mass.file.csv_file import csv_write
-from src.napari_mass.image.normalisation import init_channel_levels
-from src.napari_mass.file.DataFile import DataFile
-from src.napari_mass.ExternalTspSolver import ExternalTspSolver
-from src.napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics
-from src.napari_mass.ImageSource import ImageSource
-from src.napari_mass.Point import Point
-from src.napari_mass.section_detection import create_detection_image, detect_magsections, detect_nearest_edges
-from src.napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
-from src.napari_mass.TiffTileSource import TiffTileSource
-from src.napari_mass.ZarrSource import ZarrSource
-from src.napari_mass.parameters import *
-from src.napari_mass.image.util import *
-from src.napari_mass.util import *
+from napari_mass.file.FileDict import FileDict
+from napari_mass.file.csv_file import csv_write
+from napari_mass.image.normalisation import init_channel_levels
+from napari_mass.file.DataFile import DataFile
+from napari_mass.ExternalTspSolver import ExternalTspSolver
+from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics
+from napari_mass.ImageSource import ImageSource
+from napari_mass.Point import Point
+from napari_mass.section_detection import create_detection_image, detect_magsections, detect_nearest_edges
+from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
+from napari_mass.TiffTileSource import TiffTileSource
+from napari_mass.ZarrSource import ZarrSource
+from napari_mass.parameters import *
+from napari_mass.image.util import *
+from napari_mass.util import *
 
 
 class DataModel:
@@ -57,9 +57,12 @@ class DataModel:
     }
 
     SHAPE_THICKNESS = 20
+    POINT_SIZE = 50
 
     def __init__(self, params):
         self.params = params
+        self.params_init_done = False
+        self.init_done = False
         self.debug = True
 
         log_filename = join_path(validate_out_folder(None, 'log'), 'mass.log')
@@ -69,6 +72,10 @@ class DataModel:
         logging.basicConfig(level=logging.INFO, format=log_format, datefmt=datefmt,
                             handlers=[logging.StreamHandler(), logging.FileHandler(log_filename)], force=True)
         logging.info('Microscopy Array Section Setup logging started')
+
+        self.data = DataFile()
+        self.matches = FileDict()
+        self.transforms = FileDict()
 
         self.sections = {}
         self.order = []
@@ -85,8 +92,9 @@ class DataModel:
 
     def set_params(self, params):
         self.params = params
+        self.params_init_done = True
 
-    def init_output(self):
+    def init(self):
         logging.info('Initialising output')
 
         params = self.params
@@ -105,14 +113,20 @@ class DataModel:
         transforms_filename = join_path(self.outfolder, 'transforms.json')
         self.transforms = FileDict(transforms_filename, load=False)
 
+        self.init_done = True
+
     def init_layers(self):
         logging.info('Initialising layers')
+        self.layers = []
+        self.layers.extend(self.init_image_layers())
+        if self.layers:
+            self.layers.extend(self.init_data_layers().values())
+        return self.layers
 
+    def init_image_layers(self):
         params = self.params
         input_params = params['input']
         output_params = params['project']['output']
-
-        self.load_data()
 
         project_filename = get_dict(params, 'project.filename')
         if project_filename:
@@ -131,7 +145,7 @@ class DataModel:
         input_filename = get_dict(input_params, 'source.filename')
         if input_filename is None or input_filename == '':
             logging.warning('Source not set')
-            return
+            return []
 
         self.source = get_source(base_folder, input_filename)
         self.small_image = uint8_image(get_image_at_pixelsize(self.source, self.output_pixel_size, render_rgb=True))
@@ -190,38 +204,44 @@ class DataModel:
             pixel_size = list(pixel_size) * 2
         self.pixel_size = pixel_size[:2]
 
-        # image layers
-        layer_info = [(image, {'name': name, 'blending': blending, 'scale': pixel_size}, 'image')
-                      for image, name, blending
-                      in zip(self.back_images, self.back_images_names, self.back_images_blending)]
+        image_layers = [(image, {'name': name, 'blending': blending, 'scale': pixel_size}, 'image')
+                        for image, name, blending
+                        in zip(self.back_images, self.back_images_names, self.back_images_blending)]
+        return image_layers
 
-        # data layers
-        for layer_name in get_dict(input_params, 'layers', '').split(','):
-            layer_name = layer_name.strip()
-            values0, value_type = self.data.get_values(layer_name)
-            if value_type == 'polygon':
-                layer_type = 'shapes'
-            else:
-                layer_type = 'points'
-            layer_color = get_dict_permissive(self.LAYER_COLORS, layer_name)
+    def init_data_layers(self):
+        data_layers = {}
 
-            values = []
-            if values0:
-                values = [np.flip(value) for value in values0.values()]
+        self.load_data()
 
+        input_params = self.params['input']
+        for layer_name0 in get_dict(input_params, 'layers', '').split(','):
+            layer_name = layer_name0.strip()
+            data_layers[layer_name] = self.init_data_layer(layer_name)
+        return data_layers
+
+    def init_data_layer(self, layer_name):
+        values0, value_type = self.data.get_values(layer_name)
+        if value_type == 'polygon':
+            layer_type = 'shapes'
+        else:
+            layer_type = 'points'
+        layer_color = get_dict_permissive(self.LAYER_COLORS, layer_name)
+
+        values = []
+        if values0:
+            values = [np.flip(value) for value in values0.values()]
+
+        if layer_type == 'shapes':
+            metadata = {'name': layer_name, 'shape_type': 'polygon',
+                        'face_color': 'transparent', 'edge_color': layer_color, 'edge_width': self.SHAPE_THICKNESS}
+        else:
             metadata = {'name': layer_name,
-                        'face_color': 'transparent', 'edge_color': layer_color,
-                        'edge_width': self.SHAPE_THICKNESS}
-            if layer_type == 'points':
-                metadata['edge_width_is_relative'] = False
-            else:
-                metadata['shape_type'] = 'polygon'
-            layer_info.append((values, metadata, layer_type))
-
-        return layer_info
+                        'face_color': layer_color, 'edge_color': 'transparent', 'size': self.POINT_SIZE}
+        data_layer = values, metadata, layer_type
+        return data_layer
 
     def data_changed(self, name, action, indices, values):
-        # * TODO: if no CHANGED event emitted from points layer, trigger on CHANGING as well (for points layers)
         modified = False
         keys = []
         if name == 'landmarks':
@@ -229,10 +249,12 @@ class DataModel:
             name = 'source'
             if top_level in self.data:
                 keys = list(self.data[top_level].keys())
+            # TODO: remove this work-around when indices on CHANGED is fixed in point layers in napari:
+            if action == ActionType.CHANGING:
+                action = ActionType.CHANGED
         else:
             top_level = SECTIONS_KEY
-            if top_level in self.data:
-                keys = [key for key, value in self.data[top_level].items() if name in value]
+            keys = self.data.get_section_keys(name)
         keys += [-1]    # propagate index: -1
         for index in indices:
             key = keys[index]
@@ -245,6 +267,13 @@ class DataModel:
                 modified = True
         if modified:
             self.data.save()
+
+    def update_section_order(self, new_order):
+        new_data = {}
+        for index, key in enumerate(new_order):
+            new_data[index] = self.data[SECTIONS_KEY][key]
+        self.data[SECTIONS_KEY] = new_data
+        self.data.save()
 
     def magsection_changed(self, section_name, indices):
         if (section_name == 'magnets' or section_name == 'sections') and 'confidence' in self.shape_editor.layer_names:

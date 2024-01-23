@@ -1,9 +1,9 @@
 import numpy as np
 from tqdm import tqdm
 
-from src.napari_mass.Section import Section
-from src.napari_mass.image.util import *
-from src.napari_mass.util import *
+from napari_mass.Section import Section
+from napari_mass.image.util import *
+from napari_mass.util import *
 
 
 def create_detection_image(source, params):

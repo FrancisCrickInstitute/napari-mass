@@ -3,9 +3,9 @@ import numpy as np
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
 
-from src.napari_mass.point_matching import get_features
-from src.napari_mass.image.util import *
-from src.napari_mass.util import *
+from napari_mass.point_matching import get_features
+from napari_mass.image.util import *
+from napari_mass.util import *
 
 
 class Section:

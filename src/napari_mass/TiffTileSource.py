@@ -6,13 +6,13 @@ import numpy as np
 import tifffile
 from tifffile import TiffFile, TiffPage
 
-from src.napari_mass.file.FileDict import FileDict
-from src.napari_mass.OmeSource import OmeSource
-from src.napari_mass.TiffTileMetadata import TiffTileMetadata, sort_tiles, calc_tiles_stats
-from src.napari_mass.image.normalisation import *
-from src.napari_mass.image.util import *
-from src.napari_mass.Stitcher import *
-from src.napari_mass.util import *
+from napari_mass.file.FileDict import FileDict
+from napari_mass.OmeSource import OmeSource
+from napari_mass.TiffTileMetadata import TiffTileMetadata, sort_tiles, calc_tiles_stats
+from napari_mass.image.normalisation import *
+from napari_mass.image.util import *
+from napari_mass.Stitcher import *
+from napari_mass.util import *
 
 
 class TiffTileSource(OmeSource):

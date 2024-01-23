@@ -1,9 +1,9 @@
 from datetime import datetime
 import numpy as np
 
-from src.napari_mass.file.FileDict import FileDict
-from src.napari_mass.parameters import *
-from src.napari_mass.util import get_dict_permissive
+from napari_mass.file.FileDict import FileDict
+from napari_mass.parameters import *
+from napari_mass.util import get_dict_permissive
 
 
 class DataFile(FileDict):
@@ -26,6 +26,10 @@ class DataFile(FileDict):
             self[CREATED_KEY] = str(datetime.now())
             self[SOURCE_KEY] = NAME + ' ' + VERSION
             self[SECTIONS_KEY] = {}
+
+    def get_section_keys(self, element_name=None):
+        return [key for key, value in self[SECTIONS_KEY].items()
+                if (element_name is not None and element_name in value) or len(value) > 0]
 
     def get_section(self, section_name, default_value={}):
         return self.get(section_name, default_value)

@@ -4,6 +4,7 @@ project:
     folder: {type: path.folder, value: 'mass'}
     datafile: {type: path.save.yaml_json, value: 'mass.json'}
     pixel_size: {value: 2um}
+  initialise_project: {type: button, function: init_project}
 
 input:
   layers: {value: 'magnet, sample, rois, focus, landmarks'}
@@ -42,9 +43,11 @@ sample:
   min_match_rate: {value: 0.5}
   snap_scaledown: {value: 0.25}
   snap_margin: {value: 0.2}
+  snap_to_edges: {type: bool}
+  order_mode: {type: bool, function: set_order_mode, tip: 'Enable order mode, click sections to set new section order'}
+  copy: {type: button, function: copy_sample, tip: 'Copy selected section, click view to paste'}
   detect: {type: button, function: detect_sample, tip: 'Automatic section detection'}
   order: {type: button, function: order_sample, tip: 'Automatic section Z stack ordering'}
-  copy: {type: button, function: copy_sample, tip: 'Copy selected section, click view to paste'}
   propagate: {type: button, function: propagate_sample, tip: 'Propagate to all sections'}
 
 rois:

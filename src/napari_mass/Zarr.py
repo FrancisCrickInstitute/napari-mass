@@ -2,8 +2,8 @@ import numpy as np
 import pathlib
 import zarr
 
-from src.napari_mass.image.util import *
-from src.napari_mass.util import *
+from napari_mass.image.util import *
+from napari_mass.util import *
 
 
 class Zarr:

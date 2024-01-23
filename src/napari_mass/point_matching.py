@@ -3,8 +3,8 @@ import cv2 as cv
 from probreg import cpd
 from sklearn.metrics import euclidean_distances
 
-from src.napari_mass.image.util import *
-from src.napari_mass.util import *
+from napari_mass.image.util import *
+from napari_mass.util import *
 
 
 def align_sections_metrics(source_section, target_section, matching_methods,

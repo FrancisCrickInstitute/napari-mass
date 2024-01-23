@@ -3,8 +3,8 @@ import zarr
 from zarr.errors import GroupNotFoundError
 
 from napari_mass.image.color_conversion import hexrgb_to_rgba
-from src.napari_mass.image.normalisation import *
-from src.napari_mass.OmeSource import OmeSource
+from napari_mass.image.normalisation import *
+from napari_mass.OmeSource import OmeSource
 
 
 class ZarrSource(OmeSource):

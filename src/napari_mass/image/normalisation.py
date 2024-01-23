@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.napari_mass.image.util import *
+from napari_mass.image.util import *
 
 
 min_quantile = 0.001
