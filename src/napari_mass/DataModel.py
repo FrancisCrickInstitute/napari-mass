@@ -89,6 +89,8 @@ class DataModel:
         self.sample_sections_finalised = False
         self.landmarks_finalised = False
 
+        self.colors = create_color_table(1000)
+
     def set_params(self, params):
         self.params = params
         self.params_init_done = True
@@ -136,10 +138,6 @@ class DataModel:
         self.output_pixel_size = get_value_units_micrometer(split_value_unit_list(
                                     get_dict(output_params, 'pixel_size', '2um')))
 
-        self.back_images = []
-        self.back_images_names = []
-        self.back_images_blending = []
-
         # main image
         input_filename = get_dict(input_params, 'source.filename')
         if input_filename is None or input_filename == '':
@@ -147,28 +145,10 @@ class DataModel:
             return []
 
         self.source = get_source(base_folder, input_filename)
-        self.small_image = self.source.render(self.source.asarray(pixel_size=self.output_pixel_size))
+        source = self.source
+        self.source_pixel_size = source.get_pixel_size_micrometer()
 
-        # brightfield image
-        self.bf_source = get_source(base_folder, get_dict(input_params, 'bf'), input_filename)
-        if self.bf_source is not None:
-            small_image = self.bf_source.render(self.bf_source.asarray(pixel_size=self.output_pixel_size))
-        else:
-            self.bf_source = self.source
-            small_image = self.small_image
-        self.back_images.append(small_image)
-        self.back_images_names.append('BF')
-        self.back_images_blending.append('additive')
-
-        # fluor image
-        self.fluor_source = get_source(base_folder, get_dict(input_params, 'fluor'), input_filename)
-        if self.fluor_source is not None:
-            small_image = self.fluor_source.render(self.fluor_source.asarray(pixel_size=self.output_pixel_size))
-            self.back_images.append(small_image)
-            self.back_images_names.append('Fluor')
-            self.back_images_blending.append('additive')
-        else:
-            self.fluor_source = self.source
+        self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
 
         # hq fluor image
         hq_params = input_params.get('fluor_hq')
@@ -191,24 +171,21 @@ class DataModel:
                 s += f' channel: {channel}'
             logging.info(s)
         else:
-            self.fluor_hq_source = self.fluor_source
-        self.source_pixel_size = self.fluor_source.get_pixel_size_micrometer()
+            self.fluor_hq_source = source
 
-        self.colors = create_color_table(1000)
-
-        pixel_size = self.output_pixel_size
-        if not isinstance(pixel_size, list):
-            pixel_size = [pixel_size]
-        if len(pixel_size) == 1:
-            pixel_size = list(pixel_size) * 2
-        self.pixel_size = pixel_size[:2]
-
-
-        # TODO: get (back) images as all channels from self.source (.render())
-
-        image_layers = [(image, {'name': name, 'blending': blending, 'scale': pixel_size}, 'image')
-                        for image, name, blending
-                        in zip(self.back_images, self.back_images_names, self.back_images_blending)]
+        # set image layers
+        name = get_filetitle(source.source_reference)
+        source_pixel_size = source.get_pixel_size_micrometer()[:2]
+        contrast_limits = []
+        for channeli, channel in enumerate(source.get_channels()):
+            window = source.get_channel_window(channeli)
+            contrast_limits.append(window['min'])
+            contrast_limits.append(window['max'])
+        source_metadata = {'name': name,
+                           'blending': 'additive',
+                           'scale': source_pixel_size,
+                           'contrast_limits': contrast_limits}
+        image_layers = [(source.as_dask(), source_metadata, 'image')]
         return image_layers
 
     def init_data_layers(self):

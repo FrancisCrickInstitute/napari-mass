@@ -148,6 +148,9 @@ class OmeSource:
 
         self.output_dimension_order = 'tczyx'
 
+    def as_dask(self):
+        raise NotImplementedError('Implement method in subclass')
+
     def get_mag(self) -> float:
         mag = self.source_mag
         # get effective mag at target pixel size
@@ -213,7 +216,7 @@ class OmeSource:
             thumbnail = self.render(image_resize(image, target_size))
         return thumbnail
 
-    def get_window_min_max(self, channeli):
+    def get_channel_window(self, channeli):
         min_quantile = 0.001
         max_quantile = 0.999
 
@@ -265,7 +268,7 @@ class OmeSource:
                     else:
                         channel_values = image[..., channeli]
                     if do_normalisation:
-                        window = self.get_window_min_max(channeli)
+                        window = self.get_channel_window(channeli)
                         channel_values = normalise_values(channel_values, window['min'], window['max'])
                     else:
                         channel_values = int2float_image(channel_values)
@@ -282,7 +285,7 @@ class OmeSource:
                     tot_alpha += alpha
             new_image = float2int_image(new_image / tot_alpha)
         elif do_normalisation:
-            window = self.get_window_min_max(0)
+            window = self.get_channel_window(0)
             new_image = float2int_image(normalise_values(image, window['min'], window['max']))
         else:
             new_image = image

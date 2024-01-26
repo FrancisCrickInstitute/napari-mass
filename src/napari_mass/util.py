@@ -391,12 +391,9 @@ def join_path(base_path, filename):
         return filename
 
 
-def get_filetitle(filename: str, remove_all_ext: bool = False) -> str:
+def get_filetitle(filename: str) -> str:
     filebase = os.path.basename(filename)
-    if remove_all_ext:
-        return filebase.split('.')[0]
-    else:
-        return os.path.splitext(filebase)[0]
+    return os.path.splitext(filebase)[0]
 
 
 def get_dict_permissive(dct, name):

@@ -91,8 +91,8 @@ class MassWidget(QSplitter):
             for layer_info in layer_infos:
                 self.layer_names.append(layer_info[1]['name'])
             self.viewer.layers.selection.clear()
-            self.viewer.layers.selection.events.changed.connect(self.layer_changed)
-            self.viewer.layers.events.inserted.connect(self.layer_added)
+            self.viewer.layers.selection.events.changed.connect(self.on_layer_selection_changed)
+            self.viewer.layers.events.inserted.connect(self.on_layer_added)
         self.enable_tabs()
         self.check_enabled_layers()
         return layer_infos
@@ -114,9 +114,9 @@ class MassWidget(QSplitter):
         viewer_widget = QtViewerModelWrap(self.viewer, self.viewer_model)
         layout.addWidget(viewer_widget, 0, 0, 1, -1)
         populate_detail_button = QPushButton('Populate')
-        populate_detail_button.clicked.connect(self.populate_detail)
+        populate_detail_button.clicked.connect(self.on_populate_detail_clicked)
         propagate_detail_button = QPushButton('Propagate')
-        populate_detail_button.clicked.connect(self.propagate_detail)
+        populate_detail_button.clicked.connect(self.on_propagate_detail_clicked)
         layout.addWidget(populate_detail_button, 1, 0)
         layout.addWidget(propagate_detail_button, 1, 1)
         widget.setLayout(layout)
@@ -138,7 +138,7 @@ class MassWidget(QSplitter):
             if tip is not None:
                 widget.settabText(tip)
             tab_widget.addTab(widget, label)
-            tab_widget.currentChanged.connect(self.tab_changed)
+            tab_widget.currentChanged.connect(self.on_tab_selection_changed)
         return tab_widget
 
     def create_params_widget(self, param_prefix, template_dict):
@@ -229,21 +229,21 @@ class MassWidget(QSplitter):
             if (set and (tab_index < 0 or index <= tab_index)) or (not set and index >= tab_index):
                 self.params_widget.setTabEnabled(index, set)
 
-    def layer_added(self, event):
+    def on_layer_added(self, event):
         data_layer_names = get_dict(self.params, 'input.layers')
         layer = event.value
         if layer.name in data_layer_names:
-            layer.events.data.connect(self.layer_data_changed)
+            layer.events.data.connect(self.on_layer_data_changed)
 
             @layer.mouse_drag_callbacks.append
             def click_drag(layer, event):
-                self.layer_clicked(layer, event)
+                self.on_layer_pressed(layer, event)
                 yield
                 while event.type == 'mouse_move':
                     yield
-                self.layer_clicked_released(layer, event)
+                self.on_layer_released(layer, event)
 
-    def layer_clicked(self, layer, event):
+    def on_layer_pressed(self, layer, event):
         if self.shape_copy_mode and layer.name == self.shape_copy_layer:
             value = translate(self.copied_shape, event.position)
             #if self.shape_snap_edges:
@@ -251,7 +251,7 @@ class MassWidget(QSplitter):
             layer.add(value)
             self.shape_copy_mode = False
 
-    def layer_clicked_released(self, layer, event):
+    def on_layer_released(self, layer, event):
         if self.section_order_mode:
             if layer.selected_data:
                 item = list(layer.selected_data)[0]
@@ -262,11 +262,11 @@ class MassWidget(QSplitter):
                     self.section_order.append(item)
                     self.update_order_labels(layer)
 
-    def layer_data_changed(self, event):
+    def on_layer_data_changed(self, event):
         #print(event.source.name, event.action, event.data_indices, event.value)
         self.model.data_changed(event.source.name, event.action, event.data_indices, event.value)
 
-    def tab_changed(self, new_index):
+    def on_tab_selection_changed(self, new_index):
         if new_index != self.tab_index:
             if self.tab_index == 1:
                 self.check_enabled_layers()
@@ -279,7 +279,7 @@ class MassWidget(QSplitter):
                 self.viewer.layers.selection.active = self.viewer.layers[index]
             self.tab_index = new_index
 
-    def layer_changed(self, event):
+    def on_layer_selection_changed(self, event):
         # also triggered when new layer added (and auto-selected)
         new_selection = list(event.added)
         if len(new_selection) > 0:
@@ -384,12 +384,12 @@ class MassWidget(QSplitter):
                 self.shape_copy_mode = True
                 self.shape_copy_layer = shape_copy_layer
 
-    def populate_detail(self):
+    def on_populate_detail_clicked(self):
         # TODO: get current layer polygons from image, as image stack, assign to viewer
         # add empty layers with same config as main viewer
         pass
 
-    def propagate_detail(self):
+    def on_propagate_detail_clicked(self):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
         pass
 

@@ -1,11 +1,12 @@
 # https://pypi.org/project/tifffile/
 
 
-import os
+from concurrent.futures import ThreadPoolExecutor
+import dask.array as da
 from enum import Enum
 import numpy as np
+import os
 from tifffile import TiffFile, TiffPage
-from concurrent.futures import ThreadPoolExecutor
 
 from napari_mass.OmeSource import OmeSource
 from napari_mass.image.util import *
@@ -50,6 +51,7 @@ class TiffSource(OmeSource):
             self.executor = ThreadPoolExecutor(max_workers)
 
         tiff = TiffFile(filename)
+        self.tiff = tiff
         self.first_page = tiff.pages.first
         if tiff.is_ome and tiff.ome_metadata is not None:
             xml_metadata = tiff.ome_metadata
@@ -174,6 +176,9 @@ class TiffSource(OmeSource):
         self.source_pixel_size = pixel_size
         self.source_mag = mag
         self.channels = channels
+
+    def as_dask(self):
+        return [da.from_zarr(self.tiff.aszarr(level=level)) for level in range(len(self.sizes))]
 
     def load(self, decompress: bool = False):
         self.fh.seek(0)
