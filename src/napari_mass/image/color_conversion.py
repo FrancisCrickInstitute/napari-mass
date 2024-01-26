@@ -7,7 +7,7 @@ def int_to_rgba(intrgba: int) -> list:
 
 
 def rgba_to_int(rgba: list) -> int:
-    intrgba = int.from_bytes([int(x * 255) for x in rgba], byteorder="big", signed=True)
+    intrgba = int.from_bytes([int(x * 255) for x in rgba], signed=True, byteorder="big")
     return intrgba
 
 

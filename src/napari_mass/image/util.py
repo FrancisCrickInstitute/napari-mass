@@ -102,85 +102,73 @@ def image_set_safe(image0, image1, offset0):
     image0[y0: y0 + h, x0: x0 + w] = image1[y1: y1 + h, x1: x1 + w]
 
 
-def image_resize_fast(image: np.ndarray, target_size: tuple) -> np.ndarray:
-    shape = image.shape
-    if (len(shape) > 2 and shape[2] > 4) or image.dtype.kind == 'i' \
-            or image.dtype.byteorder == '>' or image.dtype.byteorder == '<':
-        new_image = image_resize(image, target_size)
-    else:
-        if np.mean(np.divide(np.flip(shape[:2]), target_size)) < 1:
-            interpolation = cv.INTER_CUBIC
-        else:
-            interpolation = cv.INTER_AREA
-        new_image = cv.resize(image, target_size, interpolation=interpolation)
-    return new_image
-
-
-def image_resize(image: np.ndarray, target_size0: tuple, preserve_range: bool = False) -> np.ndarray:
+def image_resize(image: np.ndarray, target_size0: tuple, dimension_order: str = 'yxc') -> np.ndarray:
     if not isinstance(image, np.ndarray):
         image = image.asarray()
     shape = image.shape
-    if np.mean(np.divide(np.flip(shape[:2]), target_size0)) < 1:
-        if preserve_range:
-            interpolation = cv.INTER_LINEAR
-        else:
-            interpolation = cv.INTER_CUBIC
+    x_index = dimension_order.index('x')
+    y_index = dimension_order.index('y')
+    size = shape[x_index], shape[y_index]
+    if np.mean(np.divide(size, target_size0)) < 1:
+        interpolation = cv.INTER_CUBIC
     else:
         interpolation = cv.INTER_AREA
     dtype0 = image.dtype
     image = ensure_unsigned_image(image)
     target_size = tuple(np.maximum(np.round(target_size0).astype(int), 1))
-    if len(shape) > 2 and shape[2] > 4:
-        # volumetric
-        target_shape = (target_size[1], target_size[0], shape[2])
-        new_image = np.zeros(target_shape, dtype=image.dtype)
-        for z in range(target_shape[2]):
-            new_image[..., z] = cv.resize(image[..., z], target_size, interpolation=interpolation)
-    else:
+    if dimension_order.startswith('yx'):
         new_image = cv.resize(image, target_size, interpolation=interpolation)
+    else:
+        if 'z' in dimension_order:
+            z_index = dimension_order.index('z')
+        if 't' in dimension_order:
+            t_index = dimension_order.index('t')
+        target_shape = list(image.shape).copy()
+        target_shape[x_index] = target_size[0]
+        target_shape[y_index] = target_size[1]
+        new_image = np.zeros(target_shape, dtype=image.dtype)
+        for t in range(image.shape[t_index]):
+            for z in range(image.shape[z_index]):
+                image1 = image[t, :, z, ...]
+                image1 = np.moveaxis(image1, 0, -1)
+                new_image1 = np.atleast_3d(cv.resize(image1, target_size, interpolation=interpolation))
+                new_image1 = np.moveaxis(new_image1, -1, 0)
+                new_image[t, :, z, ...] = new_image1
     new_image = convert_image_sign_type(new_image, dtype0)
     return new_image
 
 
-def precise_resize(image: np.ndarray, scale: np.ndarray) -> np.ndarray:
+def precise_resize(image: np.ndarray, scale: np.ndarray, use_max: bool = False) -> np.ndarray:
     h, w = np.ceil(image.shape[:2] * scale).astype(int)
-    shape = [h, w]
-    if len(image.shape) > 2:
-        shape += [image.shape[2]]
+    shape = list(image.shape).copy()
+    shape[:2] = h, w
     new_image = np.zeros(shape, dtype=np.float32)
     step_size = 1 / scale
     for y in range(h):
         for x in range(w):
             y0, y1 = np.round([y * step_size[1], (y + 1) * step_size[1]]).astype(int)
             x0, x1 = np.round([x * step_size[0], (x + 1) * step_size[0]]).astype(int)
-            value = np.mean(image[y0:y1, x0:x1], axis=(0, 1))
-            new_image[y, x] = value
-    return new_image
+            image1 = image[y0:y1, x0:x1]
+            if image1.size > 0:
+                if use_max:
+                    value = np.max(image1, axis=(0, 1))
+                else:
+                    value = np.mean(image1, axis=(0, 1))
+                new_image[y, x] = value
+    return new_image.astype(image.dtype)
 
 
-def max_resize(image: np.ndarray, scale: np.ndarray) -> np.ndarray:
-    h, w = np.ceil(image.shape[:2] * scale).astype(int)
-    shape = [h, w]
-    if len(image.shape) > 2:
-        shape += [image.shape[2]]
-    new_image = np.zeros(shape, dtype=image.dtype)
-    step_size = 1 / scale
-    for y in range(h):
-        for x in range(w):
-            y0, y1 = np.round([y * step_size[1], (y + 1) * step_size[1]]).astype(int)
-            x0, x1 = np.round([x * step_size[0], (x + 1) * step_size[0]]).astype(int)
-            value = np.max(image[y0:y1, x0:x1], axis=(0, 1))
-            new_image[y, x] = value
-    return new_image
-
-
-def max_resize_fast(image: np.ndarray, scale: np.ndarray) -> np.ndarray:
+def precise_resize_fast(image: np.ndarray, scale: np.ndarray, use_max: bool = False) -> np.ndarray:
     factor = np.round(1 / scale).astype(int)
     h, w = np.round(image.shape[:2] / factor).astype(int)
     h0, w0 = np.array([h, w]) * factor
     image = image_reshape(image, (w0, h0))
-    new_image = image.reshape((h, h0 // h, -1, w0 // w)).swapaxes(1, 2).reshape(h, w, -1).max(axis=2)
-    return new_image
+    new_image = image.reshape((h, h0 // h, -1, w0 // w)).swapaxes(1, 2).reshape(h, w, -1)
+    if use_max:
+        result_image = new_image.max(axis=2)
+    else:
+        result_image = new_image.mean(axis=2)
+    return result_image
 
 
 def get_thresholded_mean(image, threshold):
@@ -259,35 +247,23 @@ def get_image(source):
     return image
 
 
-def get_image_at_pixelsize(source, pixel_size_um, render_rgb=False):
+def get_max_image_at_pixelsize(source, pixel_size):
     if not isinstance(source, np.ndarray):
-        if source.source_pixel_size:
-            target_factor = np.mean(get_value_units_micrometer(source.source_pixel_size)[:2]) / np.mean(pixel_size_um[:2])
-        else:
-            target_factor = 1
-        best_level = 0
-        best_factor = None
-        for level, size in enumerate(source.sizes):
-            factor = np.mean(np.divide(size, source.sizes[0]))
-            if factor > target_factor or np.isclose(factor, target_factor, rtol=1e-4) or best_factor is None:
-                best_level = level
-                best_factor = factor
-        image0 = source.get_asarray_level(best_level, render_rgb=render_rgb)
-        new_size = np.multiply(source.sizes[best_level], target_factor / best_factor)
-        image = image_resize(image0, new_size)
+        pixel_size0 = [(size, 'um') for size in np.multiply(source.get_pixel_size_micrometer()[:2], 4)]
+        image0 = source.asarray(pixel_size=pixel_size0)
+        factor = np.divide(get_value_units_micrometer(pixel_size0), get_value_units_micrometer(pixel_size)[:2])
+        image = precise_resize_fast(image0, factor, use_max=True)
     else:
         image = source
     return image
 
 
-def get_max_image_at_pixelsize(source, pixel_size):
-    if not isinstance(source, np.ndarray):
-        pixel_size0 = [(size, 'um') for size in np.multiply(source.get_pixel_size_micrometer()[:2], 4)]
-        image0 = get_image_at_pixelsize(source, pixel_size0)
-        factor = np.divide(get_value_units_micrometer(pixel_size0), get_value_units_micrometer(pixel_size)[:2])
-        image = max_resize_fast(image0, factor)
-    else:
-        image = source
+def flatfield_correction(image0, dark=0, bright=1, clip=True):
+    # https://imagej.net/plugins/bigstitcher/flatfield-correction
+    mean_bright_dark = np.mean(bright - dark, (0, 1))
+    image = (image0 - dark) * mean_bright_dark / (bright - dark)
+    if clip:
+        image = np.clip(image, 0, 1)
     return image
 
 
@@ -354,9 +330,13 @@ def norm_image_minmax(image0):
     return normimage
 
 
-def get_image_quantile(image, quantile):
-    value = np.quantile(image, quantile).astype(image.dtype)
+def get_image_quantile(image: np.ndarray, quantile: float, axis=None) -> float:
+    value = np.quantile(image, quantile, axis=axis).astype(image.dtype)
     return value
+
+
+def normalise_values(image: np.ndarray, min_value: float, max_value: float) -> np.ndarray:
+    return np.clip((image.astype(np.float32) - min_value) / (max_value - min_value), 0, 1)
 
 
 def norm_image_variance(image0):

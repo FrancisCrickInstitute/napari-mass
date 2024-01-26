@@ -576,18 +576,19 @@ def split_value_unit_list(text):
     return value_units
 
 
-def get_value_units_micrometer(value_units0: list):
-    conversions = {'nm': 1e-3, 'nanometer': 1e-3,
-                   'µm': 1, 'um': 1, 'micrometer': 1,
-                   'mm': 1e3, 'millimeter': 1e3,
-                   'cm': 1e4, 'centimeter': 1e4,
-                   'm': 1e6, 'meter': 1e6}
+def get_value_units_micrometer(value_units0: list) -> list:
+    conversions = {'nm': 1e-3, 'µm': 1, 'um': 1, 'micrometer': 1, 'mm': 1e3, 'cm': 1e4, 'm': 1e6}
     if value_units0 is None:
         return None
 
-    value_units = [value_unit[0] * conversions.get(value_unit[1].lower() if len(value_unit) > 1 else 'um', 1)
-                   for value_unit in value_units0]
-    return value_units
+    values_um = []
+    for value_unit in value_units0:
+        if not isinstance(value_unit, float):
+            value_um = value_unit[0] * conversions.get(value_unit[1], 1)
+        else:
+            value_um = value_unit
+        values_um.append(value_um)
+    return values_um
 
 
 def print_hbytes(bytes):
@@ -661,3 +662,9 @@ def check_order(score_matrix, dist_matrix, order, min_match_score=None):
                 f' #Good: {ngood}/{ntotal} ({ngood / ntotal * 100:.1f}%)')
 
     return scores, distances, ngood, order, results
+
+
+def convert_rational_value(value) -> float:
+    if value is not None and isinstance(value, tuple):
+        value = value[0] / value[1]
+    return value

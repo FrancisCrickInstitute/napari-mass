@@ -309,7 +309,7 @@ class MassWidget(QSplitter):
         if os.path.exists(path):
             self.clear_controls()
             self.load_params(path)
-            self.params_widget = self.create_widgets()
+            self.params_widget = self.create_params_tab_widget()
             self.replaceWidget(0, self.params_widget)
             self.enable_tabs(False, 1)
             self.all_widgets['project.filename'].setText(path)

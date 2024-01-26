@@ -9,7 +9,6 @@ from tifffile import TiffFile, TiffPage
 from napari_mass.file.FileDict import FileDict
 from napari_mass.OmeSource import OmeSource
 from napari_mass.TiffTileMetadata import TiffTileMetadata, sort_tiles, calc_tiles_stats
-from napari_mass.image.normalisation import *
 from napari_mass.image.util import *
 from napari_mass.Stitcher import *
 from napari_mass.util import *
@@ -189,13 +188,8 @@ class TiffTileSource(OmeSource):
         self.source_mag = mag
         self.channels = channels
 
-    def get_asarray(self, x0: float = 0, y0: float = 0, x1: float = -1, y1: float = -1) -> np.ndarray:
-        return normalise_channels(self, self.asarray(x0, y0, x1, y1))
-
-    def get_asarray_level(self, level: int, x0: float = 0, y0: float = 0, x1: float = -1, y1: float = -1, render_rgb: bool = False):
-        return normalise_channels(self, self._asarray_level(level, x0, y0, x1, y1), render_rgb=render_rgb)
-
-    def _asarray_level(self, level: int, x0: float = 0, y0: float = 0, x1: float = -1, y1: float = -1) -> np.ndarray:
+    def _asarray_level(self, level: int, x0: float = 0, y0: float = 0, x1: float = -1, y1: float = -1,
+                       c: int = None, z: int = None, t: int = None) -> np.ndarray:
         factor = self.factors[level]
         # define corresponding tiles
         if x0 == 0 and y0 == 0 and (x1 < 0 or y1 < 0 or np.allclose((x1, y1), self.sizes[0][:2], atol=4)):

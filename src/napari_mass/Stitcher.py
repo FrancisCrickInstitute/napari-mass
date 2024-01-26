@@ -1,4 +1,5 @@
 import numpy as np
+from skimage.registration import phase_cross_correlation
 
 from napari_mass.image.util import *
 
@@ -168,7 +169,7 @@ class Stitcher:
             image_set_safe(out_image, tile.image, offset)
             first = False
         self.confidence = float(np.mean(confidences)) if len(confidences) > 0 else 1
-        offsets = np.round(offsets - np.mean(doffsets, 0)).astype(int).tolist()
+        offsets = np.round(np.array(offsets) - np.mean(doffsets, 0)).astype(int).tolist()
         return offsets
 
     def final_stitch(self, out_image, offsets):

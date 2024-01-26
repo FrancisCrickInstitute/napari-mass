@@ -30,18 +30,17 @@ from tifffile import xml2dict
 from tsp_solver.greedy import solve_tsp
 from tqdm import tqdm
 
+from napari_mass.TiffSource import TiffSource
 from napari_mass.file.FileDict import FileDict
 from napari_mass.file.csv_file import csv_write
-from napari_mass.image.normalisation import init_channel_levels
 from napari_mass.file.DataFile import DataFile
 from napari_mass.ExternalTspSolver import ExternalTspSolver
 from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics
-from napari_mass.ImageSource import ImageSource
 from napari_mass.Point import Point
 from napari_mass.section_detection import create_detection_image, detect_magsections, detect_nearest_edges
 from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
 from napari_mass.TiffTileSource import TiffTileSource
-from napari_mass.ZarrSource import ZarrSource
+from napari_mass.OmeZarrSource import OmeZarrSource
 from napari_mass.parameters import *
 from napari_mass.image.util import *
 from napari_mass.util import *
@@ -148,12 +147,12 @@ class DataModel:
             return []
 
         self.source = get_source(base_folder, input_filename)
-        self.small_image = uint8_image(get_image_at_pixelsize(self.source, self.output_pixel_size, render_rgb=True))
+        self.small_image = self.source.render(self.source.asarray(pixel_size=self.output_pixel_size))
 
         # brightfield image
         self.bf_source = get_source(base_folder, get_dict(input_params, 'bf'), input_filename)
         if self.bf_source is not None:
-            small_image = uint8_image(get_image_at_pixelsize(self.bf_source, self.output_pixel_size, render_rgb=True))
+            small_image = self.bf_source.render(self.bf_source.asarray(pixel_size=self.output_pixel_size))
         else:
             self.bf_source = self.source
             small_image = self.small_image
@@ -164,7 +163,7 @@ class DataModel:
         # fluor image
         self.fluor_source = get_source(base_folder, get_dict(input_params, 'fluor'), input_filename)
         if self.fluor_source is not None:
-            small_image = uint8_image(get_image_at_pixelsize(self.fluor_source, self.output_pixel_size, render_rgb=True))
+            small_image = self.fluor_source.render(self.fluor_source.asarray(pixel_size=self.output_pixel_size))
             self.back_images.append(small_image)
             self.back_images_names.append('Fluor')
             self.back_images_blending.append('additive')
@@ -203,6 +202,9 @@ class DataModel:
         if len(pixel_size) == 1:
             pixel_size = list(pixel_size) * 2
         self.pixel_size = pixel_size[:2]
+
+
+        # TODO: get (back) images as all channels from self.source (.render())
 
         image_layers = [(image, {'name': name, 'blending': blending, 'scale': pixel_size}, 'image')
                         for image, name, blending
@@ -841,7 +843,7 @@ class DataModel:
         pixel_size = get_value_units_micrometer(split_value_unit_list(self.params['sample_detection']['pixel_size']))
         sections = []
         confidences = []
-        image = int2float_image(get_image_at_pixelsize(self.bf_source, pixel_size))
+        image = int2float_image(self.bf_source.asarray(pixel_size=pixel_size))
         peak_val = calc_peak(image)
         image1 = abs(image - peak_val)
         contour_detection_image = cv.Canny(uint8_image(image1), 80, 100)
@@ -1066,14 +1068,13 @@ def get_source(base_folder, input, input_filename=None):
     filename = join_path(base_folder, filename0)
     ext = os.path.splitext(filename)[1]
     if 'zar' in ext:
-        source = ZarrSource(filename, channel=channel, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
+        source = OmeZarrSource(filename, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
     elif 'tif' in ext:
-        source = ImageSource(filename, channel=channel, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
+        source = TiffSource(filename, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
     else:
         source = cv_load(filename)
         if channel.isnumeric():
             source = source[..., channel]
-        init_channel_levels(source)
     s = f'Image source: {filename}'
     if channel != '':
         s += f' channel: {channel}'
