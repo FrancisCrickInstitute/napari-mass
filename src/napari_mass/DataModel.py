@@ -23,6 +23,7 @@ import cv2 as cv
 import glob
 import logging
 from napari.layers.base import ActionType
+from napari.utils import Colormap
 import numpy as np
 import os.path
 from sklearn.metrics import euclidean_distances
@@ -174,18 +175,30 @@ class DataModel:
             self.fluor_hq_source = source
 
         # set image layers
-        name = get_filetitle(source.source_reference)
+        image_layers = []
         source_pixel_size = source.get_pixel_size_micrometer()[:2]
-        contrast_limits = []
-        for channeli, channel in enumerate(source.get_channels()):
+        data = source.get_source_dask()
+        channels = source.get_channels()
+        for channeli, channel in enumerate(channels):
             window = source.get_channel_window(channeli)
-            contrast_limits.append(window['min'])
-            contrast_limits.append(window['max'])
-        source_metadata = {'name': name,
-                           'blending': 'additive',
-                           'scale': source_pixel_size,
-                           'contrast_limits': contrast_limits}
-        image_layers = [(source.as_dask(), source_metadata, 'image')]
+            contrast_limits = window['min'], window['max']
+            source_metadata = {'name': channel.get('label'),
+                               'blending': 'additive',
+                               'scale': source_pixel_size,
+                               'contrast_limits': contrast_limits}
+            color = channel.get('color')
+            if color:
+                source_metadata['colormap'] = Colormap([(0, 0, 0, 1), color])
+            if len(channels) > 1:
+                # Select channel from (all pyramid levels of) data
+                c_index = source.dimension_order.index('c')
+                channel_data = []
+                for level_data in data:
+                    channel_data.append(np.moveaxis(level_data, c_index, 0)[channeli])
+            else:
+                channel_data = data
+            image_layers.append((channel_data, source_metadata, 'image'))
+
         return image_layers
 
     def init_data_layers(self):

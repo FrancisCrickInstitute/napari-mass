@@ -148,7 +148,7 @@ class OmeSource:
 
         self.output_dimension_order = 'tczyx'
 
-    def as_dask(self):
+    def get_source_dask(self):
         raise NotImplementedError('Implement method in subclass')
 
     def get_mag(self) -> float:

@@ -1,15 +1,18 @@
 import os
 from PyQt5.QtWidgets import QPushButton, QFileDialog
 
+from napari_mass.util import get_dict
+
 
 class PathControl:
     FOLDER_PLACEHOLDER = '[this folder]'
 
-    def __init__(self, template, path_widget, function=None):
-        self.path_widget = path_widget
+    def __init__(self, template, path_widget, params, function=None):
         self.template = template
-        self.path_type = template['type']
+        self.path_widget = path_widget
+        self.params = params
         self.function = function
+        self.path_type = template['type']
         self.path_button = QPushButton('...')
         self.path_button.clicked.connect(self.show_dialog)
 
@@ -18,6 +21,11 @@ class PathControl:
 
     def show_dialog(self):
         value = self.path_widget.text()
+        if not value:
+            project_path = get_dict(self.params, 'project.filename')
+            if project_path is not None:
+                base_path = os.path.dirname(project_path)
+                value = base_path
         types = self.path_type.split('.')[1:]
         dialog_type = types[0].lower()
         caption = self.template.get('tip')

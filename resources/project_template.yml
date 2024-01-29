@@ -1,8 +1,8 @@
 project:
   filename: {type: path.set.yaml, function: dialog_project_file, edit: False, tip: 'Set project file'}
   output:
-    folder: {type: path.folder, value: 'mass'}
-    datafile: {type: path.save.yaml_json, value: 'mass.json'}
+    folder: {type: path.folder, edit: False, value: 'mass'}
+    datafile: {type: path.save.yaml_json, edit: False, value: 'mass.json'}
     pixel_size: {value: 2um}
   initialise_project: {type: button, function: init_project}
 

@@ -16,4 +16,5 @@ class ParamControl:
         for key in self.param_label.split('.'):
             params = params[key]
         params['value'] = value
-        self.main_widget.save_params()
+        if self.param_label != 'project.filename':
+            self.main_widget.save_params()

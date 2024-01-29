@@ -213,7 +213,7 @@ class MassWidget(QSplitter):
                 layout.addWidget(var_widget, i, 0, 1, -1)
 
             if value_type is not None and value_type.startswith('path'):
-                path_control = PathControl(template, var_widget, function=function)
+                path_control = PathControl(template, var_widget, self.params, function=function)
                 layout.addWidget(path_control.get_button_widget(), i, 2)
                 self.path_controls[param_label] = path_control
 
@@ -300,7 +300,7 @@ class MassWidget(QSplitter):
 
     def save_params(self):
         if self.project_set:
-            path = self.params['project']['filename']['value']
+            path = get_dict(self.params, 'project.filename')
             with open(path, 'w') as outfile:
                 yaml.dump(self.params, outfile, default_flow_style=None, sort_keys=False)
 
@@ -312,7 +312,6 @@ class MassWidget(QSplitter):
             self.params_widget = self.create_params_tab_widget()
             self.replaceWidget(0, self.params_widget)
             self.enable_tabs(False, 1)
-            self.all_widgets['project.filename'].setText(path)
         else:
             self.save_params()
         self.set_model_params()
