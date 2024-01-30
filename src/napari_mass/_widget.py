@@ -26,7 +26,7 @@ def get_reader(path):
     ext = os.path.splitext(path)[1]
 
     if ext in READER_SUPPORTED_TYPES:
-        return widget.image_dropped
+        return widget.on_image_dropped
     return None
 
 
@@ -75,7 +75,7 @@ class MassWidget(QSplitter):
         else:
             QMessageBox.warning(self, 'MASS', 'MASS project needs to be selected first')
 
-    def image_dropped(self, path):
+    def on_image_dropped(self, path):
         if self.model.init_done:
             self.all_widgets['input.source.filename'].setText(path)
             return self.init_layers()
@@ -320,8 +320,10 @@ class MassWidget(QSplitter):
         layer_infos = self.init_layers()
         if layer_infos:
             for layer_info in layer_infos:
-                layer = Layer.create(*layer_info)
-                self.viewer.add_layer(layer)
+                if layer_info[-1] == 'image':
+                    self.viewer.add_image(layer_info[0], **layer_info[1])
+                else:
+                    self.viewer.add_layer(Layer.create(*layer_info))
         else:
             QMessageBox.warning(self, 'Source input', 'No source image loaded')
 

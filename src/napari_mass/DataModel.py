@@ -23,8 +23,10 @@ import cv2 as cv
 import glob
 import logging
 from napari.layers.base import ActionType
-from napari.utils import Colormap
+from napari_ome_zarr._reader import transform
 import numpy as np
+from ome_zarr.io import parse_url
+from ome_zarr.reader import Reader
 import os.path
 from sklearn.metrics import euclidean_distances
 from tifffile import xml2dict
@@ -175,30 +177,35 @@ class DataModel:
             self.fluor_hq_source = source
 
         # set image layers
-        image_layers = []
-        source_pixel_size = source.get_pixel_size_micrometer()[:2]
-        data = source.get_source_dask()
-        channels = source.get_channels()
-        for channeli, channel in enumerate(channels):
-            window = source.get_channel_window(channeli)
-            contrast_limits = window['min'], window['max']
-            source_metadata = {'name': channel.get('label'),
-                               'blending': 'additive',
-                               'scale': source_pixel_size,
-                               'contrast_limits': contrast_limits}
-            color = channel.get('color')
-            if color:
-                source_metadata['colormap'] = Colormap([(0, 0, 0, 1), color])
-            if len(channels) > 1:
-                # Select channel from (all pyramid levels of) data
-                c_index = source.dimension_order.index('c')
-                channel_data = []
-                for level_data in data:
-                    channel_data.append(np.moveaxis(level_data, c_index, 0)[channeli])
-            else:
-                channel_data = data
-            image_layers.append((channel_data, source_metadata, 'image'))
+        if isinstance(source, OmeZarrSource):
+            reader = Reader(parse_url(join_path(base_folder, input_filename)))
+            image_layers = transform(reader())()
+        else:
+            image_layers = []
+            source_pixel_size = source.get_pixel_size_micrometer()[:2]
+            data = source.get_source_dask()
+            channels = source.get_channels()
+            channel_names = []
+            scales = []
+            blendings = []
+            contrast_limits = []
+            colormaps = []
+            for channeli, channel in enumerate(channels):
+                channel_names.append(channel.get('label'))
+                blendings.append('additive')
+                window = source.get_channel_window(channeli)
+                contrast_limits.append((window['min'], window['max']))
+                colormaps.append(channel.get('color'))
+                scales.append(source_pixel_size)
 
+            c_index = source.dimension_order.index('c')
+            source_metadata = {'name': channel_names,
+                               'blending': blendings,
+                               'scale': scales,
+                               'contrast_limits': contrast_limits,
+                               'colormap': colormaps,
+                               'channel_axis': c_index}
+            image_layers.append((data, source_metadata, 'image'))
         return image_layers
 
     def init_data_layers(self):
