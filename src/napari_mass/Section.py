@@ -204,20 +204,19 @@ def init_section_features(sections, source, detection_params=None, show_stats=Tr
                        show=show_stats, out_filename=out_filename)
 
 
-def get_section_images(sections, section_name, source):
-    images = {}
+def get_section_images(sections, source):
+    images = []
     logging.info('Obtaining all section images')
     pixel_size = source.get_pixel_size_micrometer()[:2]
-    crop_size, max_size = get_section_sizes(sections, section_name, pixel_size)
-    for index, section0 in tqdm(sections.items()):
-        section = section0[section_name]
+    crop_size, max_size = get_section_sizes(sections, pixel_size)
+    for section in sections:
         rotated_image = cv.rotate(section.get_rotated_image(source, pixel_size, max_size), cv.ROTATE_90_CLOCKWISE)
-        images[index] = uint8_image(norm_image_minmax(rotated_image))
+        images.append(uint8_image(norm_image_minmax(rotated_image)))
     return images
 
 
-def get_section_sizes(sections, section_name, pixel_size):
-    sizes = np.divide([section[section_name].get_size() for section in sections.values()], pixel_size[:2])
+def get_section_sizes(sections, pixel_size):
+    sizes = np.divide([section.get_size() for section in sections], pixel_size[:2])
     mean_size = np.median(sizes, 0).astype(int)
     padded_size = np.round(mean_size * 1.25).astype(int)
     return mean_size, padded_size

@@ -15,7 +15,7 @@ import yaml
 from napari_mass.PathControl import PathControl
 from napari_mass.ParamControl import ParamControl
 from napari_mass.QtViewerModelWrap import QtViewerModelWrap
-from napari_mass.util import get_dict, translate
+from napari_mass.util import *
 from napari_mass.parameters import *
 
 
@@ -50,7 +50,7 @@ class MassWidget(QSplitter):
         self.section_order = []
 
         self.viewer_model = ViewerModel()
-        self.detail_viewer = self.create_view_widget()
+        self.detail_viewer = self.create_view_widget(self.viewer_model)
         self.params_widget = self.create_params_tab_widget()
         self.setOrientation(Qt.Vertical)
         self.addWidget(self.params_widget)
@@ -107,11 +107,11 @@ class MassWidget(QSplitter):
         with open(path, 'r') as infile:
             self.params = yaml.load(infile, Loader=yaml.Loader)
 
-    def create_view_widget(self):
+    def create_view_widget(self, model):
         widget = QWidget()
         layout = QGridLayout()
         layout.setAlignment(Qt.AlignTop)
-        viewer_widget = QtViewerModelWrap(self.viewer, self.viewer_model)
+        viewer_widget = QtViewerModelWrap(self.viewer, model)
         layout.addWidget(viewer_widget, 0, 0, 1, -1)
         populate_detail_button = QPushButton('Populate')
         populate_detail_button.clicked.connect(self.on_populate_detail_clicked)
@@ -234,7 +234,6 @@ class MassWidget(QSplitter):
         layer = event.value
         if layer.name in data_layer_names:
             layer.events.data.connect(self.on_layer_data_changed)
-
             @layer.mouse_drag_callbacks.append
             def click_drag(layer, event):
                 self.on_layer_pressed(layer, event)
@@ -242,6 +241,9 @@ class MassWidget(QSplitter):
                 while event.type == 'mouse_move':
                     yield
                 self.on_layer_released(layer, event)
+
+    def on_layer_contrast_limits_changed(self, event):
+        print(event.source.contrast_limits)
 
     def on_layer_pressed(self, layer, event):
         if self.shape_copy_mode and layer.name == self.shape_copy_layer:
@@ -268,15 +270,19 @@ class MassWidget(QSplitter):
 
     def on_tab_selection_changed(self, new_index):
         if new_index != self.tab_index:
+            current_tab = self.tab_names[new_index]
             if self.tab_index == 1:
                 self.check_enabled_layers()
             if self.viewer.layers:
-                current_tab = self.tab_names[new_index]
                 if current_tab in self.layer_names:
                     index = self.layer_names.index(current_tab)
                 else:
                     index = 0
                 self.viewer.layers.selection.active = self.viewer.layers[index]
+            if self.viewer_model.layers:
+                for layer in self.viewer_model.layers:
+                    if layer.name == current_tab:
+                        self.viewer_model.layers.selection.active = layer
             self.tab_index = new_index
 
     def on_layer_selection_changed(self, event):
@@ -321,7 +327,10 @@ class MassWidget(QSplitter):
         if layer_infos:
             for layer_info in layer_infos:
                 if layer_info[-1] == 'image':
-                    self.viewer.add_image(layer_info[0], **layer_info[1])
+                    layers = self.viewer.add_image(layer_info[0], **layer_info[1])
+                    for layer in ensure_list(layers):
+                        layer.contrast_limits_range = (0, 2 ** (8 * layer.dtype.itemsize) - 1)
+                        #layer.events.contrast_limits.connect(self.on_layer_contrast_limits_changed)
                 else:
                     self.viewer.add_layer(Layer.create(*layer_info))
         else:
@@ -386,9 +395,19 @@ class MassWidget(QSplitter):
                 self.shape_copy_layer = shape_copy_layer
 
     def on_populate_detail_clicked(self):
-        # TODO: get current layer polygons from image, as image stack, assign to viewer
-        # add empty layers with same config as main viewer
-        pass
+        self.viewer_model.layers.clear()
+        layer_name = self.viewer.layers.selection.active.name
+        image_stack = np.array(self.model.populate_detail_from_layer(layer_name))
+        if len(image_stack) > 0:
+            self.viewer_model.add_image(image_stack)
+        layer_infos = self.model.init_detail_layers()
+        if layer_infos:
+            for layer_info in layer_infos.values():
+                layer = self.viewer_model.add_layer(Layer.create(*layer_info))
+                layer.events.data.connect(self.on_detail_data_changed)
+
+    def on_detail_data_changed(self, event):
+        print(event)
 
     def on_propagate_detail_clicked(self):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data

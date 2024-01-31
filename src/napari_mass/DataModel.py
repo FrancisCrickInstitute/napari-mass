@@ -189,12 +189,14 @@ class DataModel:
             scales = []
             blendings = []
             contrast_limits = []
+            contrast_limits_range = []
             colormaps = []
             for channeli, channel in enumerate(channels):
                 channel_names.append(channel.get('label'))
                 blendings.append('additive')
                 window = source.get_channel_window(channeli)
                 contrast_limits.append((window['min'], window['max']))
+                contrast_limits_range.append((window['start'], window['end']))
                 colormaps.append(channel.get('color'))
                 scales.append(source_pixel_size)
 
@@ -203,6 +205,7 @@ class DataModel:
                                'blending': blendings,
                                'scale': scales,
                                'contrast_limits': contrast_limits,
+                               #'contrast_limits_range': contrast_limits_range,     # not supported as parameter
                                'colormap': colormaps,
                                'channel_axis': c_index}
             image_layers.append((data, source_metadata, 'image'))
@@ -216,20 +219,26 @@ class DataModel:
         input_params = self.params['input']
         for layer_name0 in get_dict(input_params, 'layers', '').split(','):
             layer_name = layer_name0.strip()
-            data_layers[layer_name] = self.init_data_layer(layer_name)
+            values0, value_type = self.data.get_values(layer_name)
+            values = [np.flip(value[value_type]) for value in values0.values()]
+            data_layers[layer_name] = self.init_data_layer(layer_name, values, value_type)
         return data_layers
 
-    def init_data_layer(self, layer_name):
-        values0, value_type = self.data.get_values(layer_name)
+    def init_detail_layers(self):
+        detail_layers = {}
+        input_params = self.params['input']
+        for layer_name0 in get_dict(input_params, 'layers', '').split(','):
+            layer_name = layer_name0.strip()
+            value_type = self.data.get_value_type(layer_name)
+            detail_layers[layer_name] = self.init_data_layer(layer_name, [], value_type)
+        return detail_layers
+
+    def init_data_layer(self, layer_name, values, value_type):
         if value_type == 'polygon':
             layer_type = 'shapes'
         else:
             layer_type = 'points'
         layer_color = get_dict_permissive(self.LAYER_COLORS, layer_name)
-
-        values = []
-        if values0:
-            values = [np.flip(value) for value in values0.values()]
 
         if layer_type == 'shapes':
             metadata = {'name': layer_name, 'shape_type': 'polygon',
@@ -243,6 +252,7 @@ class DataModel:
     def data_changed(self, name, action, indices, values):
         modified = False
         keys = []
+        value_type = self.data.get_value_type(name)
         if name == 'landmarks':
             top_level = name
             name = 'source'
@@ -259,7 +269,13 @@ class DataModel:
             key = keys[index]
             if action == ActionType.ADDED or action == ActionType.CHANGED:
                 value = np.flip(values[index])
-                self.data.set_sections_value(name, key, value, top_level=top_level)
+                if value_type == 'polygon':
+                    element = Section(value)
+                elif value_type == 'location':
+                    element = Point(value)
+                else:
+                    element = value
+                self.data.set_sections_value(name, key, element, top_level=top_level)
                 modified = True
             elif action == ActionType.REMOVED:
                 self.data.remove_value(name, key, top_level=top_level)
@@ -273,6 +289,21 @@ class DataModel:
             new_data[index] = self.data[SECTIONS_KEY][key]
         self.data[SECTIONS_KEY] = new_data
         self.data.save()
+
+    def populate_detail_from_layer(self, layer_name):
+        images = []
+        values, value_type = self.data.get_values(layer_name)
+        if value_type == 'polygon':
+            order, _ = self.data.get_values('order')
+            if len(order) == 0:
+                order = values.keys()
+            sections = [Section(values[index]) for index in order]
+            images = get_section_images(sections, self.source)
+        return images
+
+
+
+
 
     def magsection_changed(self, section_name, indices):
         if (section_name == 'magnets' or section_name == 'sections') and 'confidence' in self.shape_editor.layer_names:

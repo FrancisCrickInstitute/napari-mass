@@ -34,9 +34,12 @@ class DataFile(FileDict):
     def get_section(self, section_name, default_value={}):
         return self.get(section_name, default_value)
 
+    def get_value_type(self, element_name):
+        return get_dict_permissive(self.value_types, element_name)
+
     def get_values(self, element_name):
         values = {}
-        value_type = get_dict_permissive(self.value_types, element_name)
+        value_type = self.get_value_type(element_name)
 
         if element_name in self:
             top_level = element_name
@@ -52,11 +55,6 @@ class DataFile(FileDict):
                     value = element
                 if 'source' in value:
                     value = value['source']
-                if isinstance(value, dict):
-                    if 'polygon' in value:
-                        value = value['polygon']
-                    elif 'location' in value:
-                        value = value['location']
                 values[index] = value
         return values, value_type
 

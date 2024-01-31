@@ -239,14 +239,6 @@ def get_image_size(source):
     return size
 
 
-def get_image(source):
-    if isinstance(source, np.ndarray):
-        image = source
-    else:
-        image = source.get_asarray()
-    return image
-
-
 def get_max_image_at_pixelsize(source, pixel_size):
     if not isinstance(source, np.ndarray):
         pixel_size0 = [(size, 'um') for size in np.multiply(source.get_pixel_size_micrometer()[:2], 4)]
@@ -272,7 +264,7 @@ def get_image_crop(source, x, y, w, h):
     if isinstance(source, np.ndarray):
         cropped = source[y:y + h, x:x + w]
     else:
-        cropped = source.get_asarray(x, y, x + w, y + h)
+        cropped = source.get_yxc_image(source.asarray(x, y, x + w, y + h))
     return cropped
 
 
