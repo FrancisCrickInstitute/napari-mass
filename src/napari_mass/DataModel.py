@@ -121,6 +121,9 @@ class DataModel:
 
     def init_layers(self):
         logging.info('Initialising layers')
+
+        self.load_data()
+
         self.layers = []
         self.layers.extend(self.init_image_layers())
         if self.layers:
@@ -185,6 +188,7 @@ class DataModel:
             source_pixel_size = source.get_pixel_size_micrometer()[:2]
             data = source.get_source_dask()
             channels = source.get_channels()
+            nchannels = len(channels)
             channel_names = []
             scales = []
             blendings = []
@@ -192,15 +196,37 @@ class DataModel:
             contrast_limits_range = []
             colormaps = []
             for channeli, channel in enumerate(channels):
-                channel_names.append(channel.get('label'))
-                blendings.append('additive')
+                channel_name = channel.get('label')
+                if not channel_name:
+                    channel_name = get_filetitle(source.source_reference)
+                    if nchannels > 1:
+                        channel_name += f' #{channeli}'
+                blending_mode = 'additive'
+                channel_color = channel.get('color')
+                if channel_color:
+                    channel_color = tuple(channel_color)
                 window = source.get_channel_window(channeli)
-                contrast_limits.append((window['min'], window['max']))
-                contrast_limits_range.append((window['start'], window['end']))
-                colormaps.append(channel.get('color'))
-                scales.append(source_pixel_size)
+                window_limit = window['min'], window['max']
+                window_range = window['start'], window['end']
+                if nchannels > 1:
+                    channel_names.append(channel_name)
+                    blendings.append(blending_mode)
+                    contrast_limits.append(window_limit)
+                    contrast_limits_range.append(window_range)
+                    colormaps.append(channel.get('color'))
+                    scales.append(source_pixel_size)
+                else:
+                    channel_names = channel_name
+                    blendings = blending_mode
+                    contrast_limits = window_limit
+                    contrast_limits_range = window_range
+                    colormaps = channel_color
+                    scales = source_pixel_size
 
-            c_index = source.dimension_order.index('c')
+            if 'c' in source.dimension_order:
+                c_index = source.dimension_order.index('c')
+            else:
+                c_index = None
             source_metadata = {'name': channel_names,
                                'blending': blendings,
                                'scale': scales,
@@ -211,27 +237,26 @@ class DataModel:
             image_layers.append((data, source_metadata, 'image'))
         return image_layers
 
-    def init_data_layers(self):
+    def get_source_contrast_windows(self):
+        windows = []
+        channels = self.source.get_channels()
+        for channeli, channel in enumerate(channels):
+            window = self.source.get_channel_window(channeli)
+            windows.append(window)
+        return windows
+
+    def init_data_layers(self, top_path=DATA_SECTIONS_KEY + '/*'):
         data_layers = {}
-
-        self.load_data()
-
         input_params = self.params['input']
-        for layer_name0 in get_dict(input_params, 'layers', '').split(','):
-            layer_name = layer_name0.strip()
-            values0, value_type = self.data.get_values(layer_name)
-            values = [np.flip(value[value_type]) for value in values0.values()]
+        for layer_name in deserialise(get_dict(input_params, 'layers', '')):
+            path = top_path + '/' + layer_name
+            if layer_name == 'rois':
+                path += '/*'
+            values0 = self.data.get_values(path)
+            value_type = self.data.get_value_type(layer_name)
+            values = [np.flip(value[value_type]) for value in values0]
             data_layers[layer_name] = self.init_data_layer(layer_name, values, value_type)
         return data_layers
-
-    def init_detail_layers(self):
-        detail_layers = {}
-        input_params = self.params['input']
-        for layer_name0 in get_dict(input_params, 'layers', '').split(','):
-            layer_name = layer_name0.strip()
-            value_type = self.data.get_value_type(layer_name)
-            detail_layers[layer_name] = self.init_data_layer(layer_name, [], value_type)
-        return detail_layers
 
     def init_data_layer(self, layer_name, values, value_type):
         if value_type == 'polygon':
@@ -249,24 +274,22 @@ class DataModel:
         data_layer = values, metadata, layer_type
         return data_layer
 
-    def data_changed(self, name, action, indices, values):
-        modified = False
-        keys = []
-        value_type = self.data.get_value_type(name)
+    def section_data_changed(self, name, action, indices, values):
         if name == 'landmarks':
             top_level = name
-            name = 'source'
-            if top_level in self.data:
-                keys = list(self.data[top_level].keys())
-            # TODO: remove this work-around when indices on CHANGED is fixed in point layers in napari:
-            if action == ActionType.CHANGING:
-                action = ActionType.CHANGED
+            name = DATA_SOURCE_KEY
         else:
-            top_level = SECTIONS_KEY
-            keys = self.data.get_section_keys(name)
-        keys += [-1]    # propagate index: -1
+            top_level = DATA_SECTIONS_KEY + '/*'
+        self.data_changed(name, action, indices, values, top_level)
+
+    def template_data_changed(self, name, action, indices, values):
+        self.data_changed(name, action, indices, values, DATA_TEMPLATE_KEY)
+
+    def data_changed(self, name, action, indices, values, top_level):
+        modified = False
+        value_type = self.data.get_value_type(name)
+        # get mapping - for ROIs use mapping between hierarchical elements and single-level napari indices
         for index in indices:
-            key = keys[index]
             if action == ActionType.ADDED or action == ActionType.CHANGED:
                 value = np.flip(values[index])
                 if value_type == 'polygon':
@@ -275,7 +298,11 @@ class DataModel:
                     element = Point(value)
                 else:
                     element = value
-                self.data.set_sections_value(name, key, element, top_level=top_level)
+                #self.data.set_sections_value(name, key, element, c=top_level)
+                path = top_level + '/' + name
+                if name == 'rois':
+                    path += '/*'
+                self.data.set_value(path, index, element)
                 modified = True
             elif action == ActionType.REMOVED:
                 self.data.remove_value(name, key, top_level=top_level)
@@ -286,16 +313,17 @@ class DataModel:
     def update_section_order(self, new_order):
         new_data = {}
         for index, key in enumerate(new_order):
-            new_data[index] = self.data[SECTIONS_KEY][key]
-        self.data[SECTIONS_KEY] = new_data
+            new_data[index] = self.data[DATA_SECTIONS_KEY][key]
+        self.data[DATA_SECTIONS_KEY] = new_data
         self.data.save()
 
-    def populate_detail_from_layer(self, layer_name):
+    def get_section_images(self, section_name):
         images = []
-        values, value_type = self.data.get_values(layer_name)
+        values = self.data.get_values(DATA_SECTIONS_KEY + '/*/' + section_name)
+        value_type = self.data.get_value_type(section_name)
         if value_type == 'polygon':
-            order, _ = self.data.get_values('order')
-            if len(order) == 0:
+            order = self.data.get_values('serial_order/order')
+            if not order:
                 order = values.keys()
             sections = [Section(values[index]) for index in order]
             images = get_section_images(sections, self.source)
@@ -309,7 +337,7 @@ class DataModel:
         if (section_name == 'magnets' or section_name == 'sections') and 'confidence' in self.shape_editor.layer_names:
             for index in indices:
                 if self.update_confidence_image('magnet', index):
-                    self.shape_editor.viewer.layers[self.shape_editor.layer_names.index('confidence')].refresh()
+                    self.shape_editor.main_viewer.layers[self.shape_editor.layer_names.index('confidence')].refresh()
 
     def create_confidence_image(self, section_name):
         # reduced resolution, using alpha channel
@@ -602,13 +630,14 @@ class DataModel:
 
     def load_data(self):
         self.data.load()
-        self.sections = self.load_objects(self.data.get_section(SECTIONS_KEY))
+        self.sections = self.load_objects(self.data.get_section(DATA_SECTIONS_KEY))
         self.matches.load()
         self.transforms.load()
         self.order = self.data.get_section('serial_order').get('order', [])
-        self.order_confidences = self.data.get_section('serial_order').get(CONFIDENCE_SUBKEY, [])
+        self.order_confidences = self.data.get_section('serial_order').get(DATA_CONFIDENCE_SUBKEY, [])
         self.stage_order = self.data.get_section('stage_order').get('order', [])
-        self.landmarks = {index: Point(value['source']) for index, value in self.data.get_section('landmarks').items()}
+        self.landmarks = {index: Point(value[DATA_SOURCE_KEY])
+                          for index, value in self.data.get_section('landmarks').items()}
 
     def check_init_magsections(self, get_features=False):
         if not self.magsections_initialised:
@@ -997,7 +1026,7 @@ class DataModel:
                 landmark = Point(value)
                 self.landmarks[index] = landmark
                 landmarks[index] = landmark.to_dict()
-                self.data.set_sections_value('source', index, landmark.to_dict(), top_level='landmarks')
+                self.data.set_sections_value(DATA_SOURCE_KEY, index, landmark.to_dict(), top_level='landmarks')
             self.data.save()
         self.landmarks_finalised = True
 

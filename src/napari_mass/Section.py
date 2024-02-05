@@ -210,7 +210,7 @@ def get_section_images(sections, source):
     pixel_size = source.get_pixel_size_micrometer()[:2]
     crop_size, max_size = get_section_sizes(sections, pixel_size)
     for section in sections:
-        rotated_image = cv.rotate(section.get_rotated_image(source, pixel_size, max_size), cv.ROTATE_90_CLOCKWISE)
+        rotated_image = section.get_rotated_image(source, pixel_size, max_size)
         images.append(uint8_image(norm_image_minmax(rotated_image)))
     return images
 

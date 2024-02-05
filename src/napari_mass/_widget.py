@@ -40,7 +40,7 @@ class MassWidget(QSplitter):
         self.clear_controls()
         self.load_params(PROJECT_TEMPLATE)
         self.create_model()
-        self.viewer = napari_viewer
+        self.main_viewer = napari_viewer
         self.copied_shape = None
         self.shape_copy_mode = False
         self.shape_copy_layer = None
@@ -49,13 +49,13 @@ class MassWidget(QSplitter):
         self.section_ordering = False
         self.section_order = []
 
-        self.viewer_model = ViewerModel()
-        self.detail_viewer = self.create_view_widget(self.viewer_model)
+        self.template_viewer = ViewerModel()
+        self.template_widget = self.create_view_widget(self.template_viewer)
         self.params_widget = self.create_params_tab_widget()
         self.setOrientation(Qt.Vertical)
         self.addWidget(self.params_widget)
-        self.addWidget(self.detail_viewer)
-        self.setMaximumWidth(300)   # only way found to limit detail_viewer initial width
+        self.addWidget(self.template_widget)
+        self.setMaximumWidth(300)   # only way found to limit template viewer widget initial width
 
         self.enable_tabs(False, 1)
 
@@ -84,15 +84,15 @@ class MassWidget(QSplitter):
             return None
 
     def init_layers(self):
-        self.viewer.layers.clear()
+        self.main_viewer.layers.clear()
         layer_infos = self.model.init_layers()
         self.layer_names = []
         if layer_infos:
             for layer_info in layer_infos:
                 self.layer_names.append(layer_info[1]['name'])
-            self.viewer.layers.selection.clear()
-            self.viewer.layers.selection.events.changed.connect(self.on_layer_selection_changed)
-            self.viewer.layers.events.inserted.connect(self.on_layer_added)
+            self.main_viewer.layers.selection.clear()
+            self.main_viewer.layers.selection.events.changed.connect(self.on_layer_selection_changed)
+            self.main_viewer.layers.events.inserted.connect(self.on_layer_added)
         self.enable_tabs()
         self.check_enabled_layers()
         return layer_infos
@@ -107,18 +107,18 @@ class MassWidget(QSplitter):
         with open(path, 'r') as infile:
             self.params = yaml.load(infile, Loader=yaml.Loader)
 
-    def create_view_widget(self, model):
+    def create_view_widget(self, viewer):
         widget = QWidget()
         layout = QGridLayout()
         layout.setAlignment(Qt.AlignTop)
-        viewer_widget = QtViewerModelWrap(self.viewer, model)
+        viewer_widget = QtViewerModelWrap(self.main_viewer, viewer)
         layout.addWidget(viewer_widget, 0, 0, 1, -1)
-        populate_detail_button = QPushButton('Populate')
-        populate_detail_button.clicked.connect(self.on_populate_detail_clicked)
-        propagate_detail_button = QPushButton('Propagate')
-        populate_detail_button.clicked.connect(self.on_propagate_detail_clicked)
-        layout.addWidget(populate_detail_button, 1, 0)
-        layout.addWidget(propagate_detail_button, 1, 1)
+        populate_template_button = QPushButton('Populate')
+        populate_template_button.clicked.connect(self.on_populate_template_clicked)
+        propagate_template_button = QPushButton('Propagate')
+        populate_template_button.clicked.connect(self.on_propagate_template_clicked)
+        layout.addWidget(populate_template_button, 1, 0)
+        layout.addWidget(propagate_template_button, 1, 1)
         widget.setLayout(layout)
         return widget
 
@@ -229,11 +229,36 @@ class MassWidget(QSplitter):
             if (set and (tab_index < 0 or index <= tab_index)) or (not set and index >= tab_index):
                 self.params_widget.setTabEnabled(index, set)
 
+    def select_tab(self, index):
+        self.tab_index = index  # prevent event loop
+        self.params_widget.setCurrentIndex(index)
+
+    def check_enabled_layers(self):
+        for index, name in enumerate(self.tab_names):
+            if index > 1:
+                enabled = (name in get_dict(self.params, 'input.layers'))
+                self.params_widget.setTabEnabled(index, enabled)
+
+    def select_layer(self, name):
+        if self.main_viewer.layers:
+            if name in self.layer_names:
+                index = self.layer_names.index(name)
+            else:
+                index = 0
+            self.main_viewer.layers.selection.active = self.main_viewer.layers[index]
+
+    def select_template_layer(self, name):
+        if self.template_viewer.layers:
+            for layer in self.template_viewer.layers:
+                if layer.name == name:
+                    self.template_viewer.layers.selection.active = layer
+
     def on_layer_added(self, event):
         data_layer_names = get_dict(self.params, 'input.layers')
         layer = event.value
         if layer.name in data_layer_names:
             layer.events.data.connect(self.on_layer_data_changed)
+            layer.events.mode.connect(self.on_layer_mode_changed)
             @layer.mouse_drag_callbacks.append
             def click_drag(layer, event):
                 self.on_layer_pressed(layer, event)
@@ -264,25 +289,13 @@ class MassWidget(QSplitter):
                     self.section_order.append(item)
                     self.update_order_labels(layer)
 
-    def on_layer_data_changed(self, event):
-        #print(event.source.name, event.action, event.data_indices, event.value)
-        self.model.data_changed(event.source.name, event.action, event.data_indices, event.value)
-
     def on_tab_selection_changed(self, new_index):
         if new_index != self.tab_index:
             current_tab = self.tab_names[new_index]
             if self.tab_index == 1:
                 self.check_enabled_layers()
-            if self.viewer.layers:
-                if current_tab in self.layer_names:
-                    index = self.layer_names.index(current_tab)
-                else:
-                    index = 0
-                self.viewer.layers.selection.active = self.viewer.layers[index]
-            if self.viewer_model.layers:
-                for layer in self.viewer_model.layers:
-                    if layer.name == current_tab:
-                        self.viewer_model.layers.selection.active = layer
+            self.select_layer(current_tab)
+            self.select_template_layer(current_tab)
             self.tab_index = new_index
 
     def on_layer_selection_changed(self, event):
@@ -290,19 +303,28 @@ class MassWidget(QSplitter):
         new_selection = list(event.added)
         if len(new_selection) > 0:
             layer_name = new_selection[0].name
+            self.select_template_layer(layer_name)
             if layer_name in self.tab_names:
                 self.select_tab(self.tab_names.index(layer_name))
         self.shape_copy_mode = False
 
-    def select_tab(self, index):
-        self.tab_index = index  # prevent event loop
-        self.params_widget.setCurrentIndex(index)
+    def on_layer_mode_changed(self, event):
+        layer = event.source
+        name = layer.name
+        mode = layer.mode
+        if self.template_viewer.layers:
+            for layer in self.template_viewer.layers:
+                if layer.name == name:
+                    self.select_template_layer(name)
+                    layer.mode = mode
 
-    def check_enabled_layers(self):
-        for index, name in enumerate(self.tab_names):
-            if index > 1:
-                enabled = (name in get_dict(self.params, 'input.layers'))
-                self.params_widget.setTabEnabled(index, enabled)
+    def on_layer_data_changed(self, event):
+        #print(event.source.name, event.action, event.data_indices, event.value)
+        self.model.section_data_changed(event.source.name, event.action, event.data_indices, event.value)
+
+    def on_template_data_changed(self, event):
+        #print(event.source.name, event.action, event.data_indices, event.value)
+        self.model.template_data_changed(event.source.name, event.action, event.data_indices, event.value)
 
     def save_params(self):
         if self.project_set:
@@ -327,12 +349,14 @@ class MassWidget(QSplitter):
         if layer_infos:
             for layer_info in layer_infos:
                 if layer_info[-1] == 'image':
-                    layers = self.viewer.add_image(layer_info[0], **layer_info[1])
-                    for layer in ensure_list(layers):
-                        layer.contrast_limits_range = (0, 2 ** (8 * layer.dtype.itemsize) - 1)
+                    windows = self.model.get_source_contrast_windows()
+                    layers = self.main_viewer.add_image(layer_info[0], **layer_info[1])
+                    for layer, window in zip(ensure_list(layers), windows):
+                        layer.contrast_limits = (window['min'], window['max'])
+                        layer.contrast_limits_range = (window['start'], window['end'])
                         #layer.events.contrast_limits.connect(self.on_layer_contrast_limits_changed)
                 else:
-                    self.viewer.add_layer(Layer.create(*layer_info))
+                    self.main_viewer.add_layer(Layer.create(*layer_info))
         else:
             QMessageBox.warning(self, 'Source input', 'No source image loaded')
 
@@ -343,7 +367,7 @@ class MassWidget(QSplitter):
         pass
 
     def set_order_mode(self, value):
-        layer = self.viewer.layers.selection.active
+        layer = self.main_viewer.layers.selection.active
         if layer:
             self.section_order_mode = value
             if self.section_order_mode:
@@ -375,7 +399,7 @@ class MassWidget(QSplitter):
         data_layers = self.model.init_data_layers()
         for layer_name, layer_info in data_layers.items():
             layer_index = self.layer_names.index(layer_name)
-            self.viewer.layers[layer_index].data = layer_info[0]
+            self.main_viewer.layers[layer_index].data = layer_info[0]
 
     def detect_sample(self):
         pass
@@ -387,29 +411,30 @@ class MassWidget(QSplitter):
         shape_copy_layer = 'sample'
         if shape_copy_layer in self.layer_names:
             layer_index = self.layer_names.index(shape_copy_layer)
-            layer = self.viewer.layers[layer_index]
+            layer = self.main_viewer.layers[layer_index]
             selection = list(layer.selected_data)
             if len(selection) > 0:
                 self.copied_shape = layer.data[selection[0]]
                 self.shape_copy_mode = True
                 self.shape_copy_layer = shape_copy_layer
 
-    def on_populate_detail_clicked(self):
-        self.viewer_model.layers.clear()
-        layer_name = self.viewer.layers.selection.active.name
-        image_stack = np.array(self.model.populate_detail_from_layer(layer_name))
+    def on_populate_template_clicked(self):
+        self.template_viewer.layers.clear()
+        layer_name = self.main_viewer.layers.selection.active.name
+        image_stack = np.array(self.model.get_section_images(layer_name))
         if len(image_stack) > 0:
-            self.viewer_model.add_image(image_stack)
-        layer_infos = self.model.init_detail_layers()
+            self.template_viewer.add_image(image_stack)
+        else:
+            QMessageBox.warning(self, 'MASS', 'No layer data to populate')
+        layer_infos = self.model.init_data_layers(DATA_TEMPLATE_KEY)
         if layer_infos:
             for layer_info in layer_infos.values():
-                layer = self.viewer_model.add_layer(Layer.create(*layer_info))
-                layer.events.data.connect(self.on_detail_data_changed)
+                layer = self.template_viewer.add_layer(Layer.create(*layer_info))
+                layer.events.data.connect(self.on_template_data_changed)
+            main_layer = self.main_viewer.layers.selection.active
+            self.select_template_layer(main_layer.name)
 
-    def on_detail_data_changed(self, event):
-        print(event)
-
-    def on_propagate_detail_clicked(self):
+    def on_propagate_template_clicked(self):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
         pass
 

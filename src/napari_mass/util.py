@@ -379,6 +379,14 @@ def ensure_list(x):
         return [x]
 
 
+def serialise(lst, symbol=','):
+    return symbol.join(lst)
+
+
+def deserialise(s, symbol=','):
+    return list(filter(None, map(str.strip, s.split(symbol))))
+
+
 def get_numpy_type(s):
     types = {'uint8': np.uint8, 'uint16': np.uint16, 'uint32': np.uint32, 'float32': np.float32, 'float64': np.float64}
     return types[s]
