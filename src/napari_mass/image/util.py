@@ -259,12 +259,12 @@ def flatfield_correction(image0, dark=0, bright=1, clip=True):
     return image
 
 
-def get_image_crop(source, x, y, w, h):
+def get_image_crop(source, x, y, w, h, pixel_size=None):
     x, y, w, h = int(x), int(y), int(w), int(h)
     if isinstance(source, np.ndarray):
         cropped = source[y:y + h, x:x + w]
     else:
-        cropped = source.get_yxc_image(source.asarray(x, y, x + w, y + h))
+        cropped = source.get_yxc_image(source.asarray(x, y, x + w, y + h, pixel_size=pixel_size))
     return cropped
 
 
@@ -320,6 +320,32 @@ def norm_image_minmax(image0):
     if alpha is not None:
         normimage = np.dstack([normimage, alpha])
     return normimage
+
+
+def redimension_data(data, old_order, new_order, **kwargs):
+    # able to provide optional dimension values e.g. t=0, z=0
+    if new_order == old_order:
+        return data
+
+    new_data = data
+    order = old_order
+    # remove
+    for o in old_order:
+        if o not in new_order:
+            index = order.index(o)
+            dim_value = kwargs.get(o, 0)
+            new_data = np.take(new_data, indices=dim_value, axis=index)
+            order = order.replace(o, '')
+    # add
+    for o in new_order:
+        if o not in order:
+            new_data = np.expand_dims(new_data, 0)
+            order = o + order
+    # move
+    old_indices = [order.index(o) for o in new_order]
+    new_indices = list(range(len(new_order)))
+    new_data = np.moveaxis(new_data, old_indices, new_indices)
+    return new_data
 
 
 def get_image_quantile(image: np.ndarray, quantile: float, axis=None) -> float:
@@ -522,11 +548,11 @@ def rotate_image(image, angle, center):
     return cv.warpAffine(image, transform, (nW, nH))
 
 
-def get_image_crop_polygon(source, polygon):
+def get_image_crop_polygon(source, polygon, pixel_size=None):
     polygon_min, polygon_max = np.min(polygon, 0), np.max(polygon, 0)
     w, h = np.ceil(polygon_max - polygon_min).astype(int)
     x, y = polygon_min
-    cropped = get_image_crop(source, x, y, w, h)
+    cropped = get_image_crop(source, x, y, w, h, pixel_size=pixel_size)
     # use mask for alpha channel only
     polygon1 = polygon - (x, y)
     mask = get_contour_mask(polygon1, shape=(h, w), dtype=cropped.dtype)

@@ -424,6 +424,7 @@ class MassWidget(QSplitter):
         image_stack = np.array(self.model.get_section_images(layer_name))
         if len(image_stack) > 0:
             self.template_viewer.add_image(image_stack)
+            self.template_viewer.dims.set_point(0, 0)  # set index to 0
         else:
             QMessageBox.warning(self, 'MASS', 'No layer data to populate')
         layer_infos = self.model.init_data_layers(DATA_TEMPLATE_KEY)

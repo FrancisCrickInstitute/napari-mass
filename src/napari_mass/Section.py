@@ -73,7 +73,7 @@ class Section:
         #    y = 0
         #    h = self.center[1] * 2
 
-        cropped = color_image(norm_image_minmax(get_image_crop(source, x, y, w, h)))
+        cropped = color_image(norm_image_minmax(get_image_crop(source, x, y, w, h, pixel_size=pixel_size)))
         # improved crop using mask
         polygon1 = polygon - (x, y)
         mask = get_contour_mask(polygon1, shape=(h, w))
@@ -96,7 +96,7 @@ class Section:
         boxmin, boxmax = np.min(box, 0), np.max(box, 0)
         w, h = np.ceil(boxmax - boxmin).astype(int)
         x, y = boxmin
-        cropped = color_image(int2float_image(get_image_crop(source, x, y, w, h)))
+        cropped = color_image(int2float_image(get_image_crop(source, x, y, w, h, pixel_size=pixel_size)))
         if use_alpha:
             polygon1 = self.polygon / pixel_size[:2] - boxmin
             mask = get_contour_mask(polygon1, shape=(h, w))
@@ -204,10 +204,11 @@ def init_section_features(sections, source, detection_params=None, show_stats=Tr
                        show=show_stats, out_filename=out_filename)
 
 
-def get_section_images(sections, source):
+def get_section_images(sections, source, pixel_size=None):
     images = []
     logging.info('Obtaining all section images')
-    pixel_size = source.get_pixel_size_micrometer()[:2]
+    if pixel_size is None:
+        pixel_size = source.get_pixel_size_micrometer()[:2]
     crop_size, max_size = get_section_sizes(sections, pixel_size)
     for section in sections:
         rotated_image = section.get_rotated_image(source, pixel_size, max_size)

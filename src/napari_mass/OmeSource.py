@@ -151,6 +151,13 @@ class OmeSource:
     def get_source_dask(self):
         raise NotImplementedError('Implement method in subclass')
 
+    def get_output_dask(self):
+        data = self._get_output_dask()
+        return redimension_data(data, self.dimension_order, self.get_dimension_order())
+
+    def _get_output_dask(self):
+        raise NotImplementedError('Implement method in subclass')
+
     def get_mag(self) -> float:
         mag = self.source_mag
         # get effective mag at target pixel size
@@ -313,7 +320,8 @@ class OmeSource:
             ox0, oy0, ox1, oy1 = x0, y0, x1, y1
         image0 = self._asarray_level(level, ox0, oy0, ox1, oy1, c, z, t)
         if np.mean(factor) != 1:
-            image = image_resize(image0, size0, dimension_order=self.get_dimension_order())
+            size1 = x1 - x0, y1 - y0
+            image = image_resize(image0, size1, dimension_order=self.get_dimension_order())
         else:
             image = image0
         return image

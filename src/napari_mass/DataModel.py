@@ -154,7 +154,7 @@ class DataModel:
         source = self.source
         self.source_pixel_size = source.get_pixel_size_micrometer()
 
-        self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
+        #self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
 
         # hq fluor image
         hq_params = input_params.get('fluor_hq')
@@ -287,8 +287,10 @@ class DataModel:
 
     def data_changed(self, name, action, indices, values, top_level):
         modified = False
+        path = top_level + '/' + name
+        if name == 'rois':
+            path += '/*'
         value_type = self.data.get_value_type(name)
-        # get mapping - for ROIs use mapping between hierarchical elements and single-level napari indices
         for index in indices:
             if action == ActionType.ADDED or action == ActionType.CHANGED:
                 value = np.flip(values[index])
@@ -298,15 +300,9 @@ class DataModel:
                     element = Point(value)
                 else:
                     element = value
-                #self.data.set_sections_value(name, key, element, c=top_level)
-                path = top_level + '/' + name
-                if name == 'rois':
-                    path += '/*'
-                self.data.set_value(path, index, element)
-                modified = True
+                modified = self.data.set_value(path, index, element)
             elif action == ActionType.REMOVED:
-                self.data.remove_value(name, key, top_level=top_level)
-                modified = True
+                modified = self.data.remove_value(path, index)
         if modified:
             self.data.save()
 
@@ -326,7 +322,7 @@ class DataModel:
             if not order:
                 order = values.keys()
             sections = [Section(values[index]) for index in order]
-            images = get_section_images(sections, self.source)
+            images = get_section_images(sections, self.source, pixel_size=self.output_pixel_size)
         return images
 
 

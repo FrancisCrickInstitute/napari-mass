@@ -180,6 +180,9 @@ class TiffSource(OmeSource):
     def get_source_dask(self):
         return [da.from_zarr(self.tiff.aszarr(level=level)) for level in range(len(self.sizes))]
 
+    def _get_output_dask(self):
+        return da.from_zarr(self.tiff.aszarr(level=0))
+
     def load(self, decompress: bool = False):
         self.fh.seek(0)
         self.data = self.fh.read()
@@ -286,6 +289,7 @@ class TiffSource(OmeSource):
 
         dataoffsets = []
         databytecounts = []
+        tile_locations = []
         for i, page in enumerate(pages):
             for y in range(tile_y0, tile_y1):
                 for x in range(tile_x0, tile_x1):
@@ -296,8 +300,11 @@ class TiffSource(OmeSource):
                         if count > 0:
                             dataoffsets.append(offset)
                             databytecounts.append(count)
+                            target_y = (y - tile_y0) * tile_height
+                            target_x = (x - tile_x0) * tile_width
+                            tile_locations.append((i, 0, target_y, target_x, 0))
 
-            self._decode(page, dataoffsets, databytecounts, out)
+            self._decode(page, dataoffsets, databytecounts, tile_locations, out)
 
         target_y0 = y0 - tile_y0 * tile_height
         target_x0 = x0 - tile_x0 * tile_width
@@ -313,17 +320,17 @@ class TiffSource(OmeSource):
             image = image[:, c:c+1, ...]
         return image
 
-    def _decode(self, page: TiffPage, dataoffsets: list, databytecounts: list, out: np.ndarray):
-        def process_decoded(decoded, out=out):
+    def _decode(self, page: TiffPage, dataoffsets: list, databytecounts: list, tile_locations: list, out: np.ndarray):
+        def process_decoded(decoded, index, out=out):
             segment, indices, shape = decoded
-            s = indices
-            d = shape
+            s = tile_locations[index]
+            e = np.array(s) + ([1] + list(shape))
             # Note: numpy is not thread-safe
-            out[s[0],
-                s[1]: s[1] + d[0],
-                s[2]: s[2] + d[1],
-                s[3]: s[3] + d[2],
-                s[4]: s[4] + d[3]] = segment
+            out[s[0]: e[0],
+                s[1]: e[1],
+                s[2]: e[2],
+                s[3]: e[3],
+                s[4]: e[4]] = segment
 
         for _ in self._segments(
                 process_function=process_decoded,
@@ -337,7 +344,7 @@ class TiffSource(OmeSource):
         # based on tiffile segments
         def decode(args, page=page, process_function=process_function):
             decoded = page.decode(*args, jpegtables=page.jpegtables)
-            return process_function(decoded)
+            return process_function(decoded, args[1])
 
         tile_segments = []
         for index in range(len(dataoffsets)):
