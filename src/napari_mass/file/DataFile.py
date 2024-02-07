@@ -43,7 +43,7 @@ class DataFile(FileDict):
     def get_values(self, keys, dct=None):
         if dct is None:
             dct = self
-        if '/' in keys:
+        if not isinstance(keys, list):
             keys = deserialise(keys, '/')
 
         for keyi, key in enumerate(keys):
@@ -76,15 +76,54 @@ class DataFile(FileDict):
                 n = 1
             if index < n:
                 if value:
+                    # set
                     item[final_key] = value
+                    return True
                 else:
-                    item.pop(final_key)
-                return True
+                    # remove
+                    old_value = item.pop(final_key, None)
+                    return old_value is not None
             index -= n
+        return False
+
+    def add_value(self, keys, value, dct=None):
+        if dct is None:
+            dct = self
+        if not isinstance(keys, list):
+            keys = deserialise(keys, '/')
+
+        for keyi, key in enumerate(keys):
+            is_final_key = (keyi == len(keys) - 1)
+            if key == '*':
+                index = 0
+                while index in dct:
+                    if not is_final_key and not self.exists(keys[keyi + 1:], dct.get(index, {})):
+                        break
+                    index += 1
+                key = index
+            if is_final_key:
+                dct[key] = value
+                return True
+            if key not in dct:
+                dct[key] = {}
+            dct = dct[key]
         return False
 
     def remove_value(self, keys, index):
         return self.set_value(keys, index, None)
+
+    def exists(self, keys, dct=None):
+        if dct is None:
+            dct = self
+        if not isinstance(keys, list):
+            keys = deserialise(keys, '/')
+
+        for key in keys:
+            if key in dct:
+                dct = dct[key]
+            else:
+                return False
+        return True
 
     def set_section(self, key, values):
         paths = []

@@ -295,12 +295,13 @@ class DataModel:
             if action == ActionType.ADDED or action == ActionType.CHANGED:
                 value = np.flip(values[index])
                 if value_type == 'polygon':
-                    element = Section(value)
+                    value = Section(value).to_dict()
                 elif value_type == 'location':
-                    element = Point(value)
-                else:
-                    element = value
-                modified = self.data.set_value(path, index, element)
+                    value = Point(value).to_dict()
+                if action == ActionType.ADDED:
+                    modified = self.data.add_value(path, value)
+                elif action == ActionType.CHANGED:
+                    modified = self.data.set_value(path, index, value)
             elif action == ActionType.REMOVED:
                 modified = self.data.remove_value(path, index)
         if modified:
