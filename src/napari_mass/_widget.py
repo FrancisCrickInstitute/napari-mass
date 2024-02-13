@@ -89,7 +89,11 @@ class MassWidget(QSplitter):
         self.layer_names = []
         if layer_infos:
             for layer_info in layer_infos:
-                self.layer_names.append(layer_info[1]['name'])
+                name_info = layer_info[1]['name']
+                if isinstance(name_info, list):
+                    self.layer_names.extend(name_info)
+                else:
+                    self.layer_names.append(name_info)
             self.main_viewer.layers.selection.clear()
             self.main_viewer.layers.selection.events.changed.connect(self.on_layer_selection_changed)
             self.main_viewer.layers.events.inserted.connect(self.on_layer_added)
@@ -116,7 +120,7 @@ class MassWidget(QSplitter):
         populate_template_button = QPushButton('Populate')
         populate_template_button.clicked.connect(self.on_populate_template_clicked)
         propagate_template_button = QPushButton('Propagate')
-        populate_template_button.clicked.connect(self.on_propagate_template_clicked)
+        propagate_template_button.clicked.connect(self.on_propagate_template_clicked)
         layout.addWidget(populate_template_button, 1, 0)
         layout.addWidget(propagate_template_button, 1, 1)
         widget.setLayout(layout)
@@ -437,17 +441,9 @@ class MassWidget(QSplitter):
 
     def on_propagate_template_clicked(self):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
-        pass
-
-
-    def propagate_sample(self):
-        pass
-
-    def propagate_roi(self):
-        pass
-
-    def propagate_focus(self):
-        pass
+        self.model.extract_rois()
+        self.model.propagate_rois()
+        # update main viewer data layers
 
 
 widget: MassWidget

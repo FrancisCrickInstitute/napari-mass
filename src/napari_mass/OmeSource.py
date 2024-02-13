@@ -1,3 +1,5 @@
+import dask
+import dask.array as da
 import logging
 import numpy as np
 
@@ -32,6 +34,10 @@ class OmeSource:
     """#bits for all pages"""
     channels: list
     """channel information for all image channels"""
+    position: list
+    """source position information"""
+
+    default_physical_unit = 'µm'
 
     def __init__(self):
         self.metadata = {}
@@ -74,14 +80,22 @@ class OmeSource:
         self.source_pixel_size = []
         size = float(pixels.get('PhysicalSizeX', 0))
         if size > 0:
-            self.source_pixel_size.append((size, pixels.get('PhysicalSizeXUnit', 'µm')))
+            self.source_pixel_size.append((size, pixels.get('PhysicalSizeXUnit', self.default_physical_unit)))
         size = float(pixels.get('PhysicalSizeY', 0))
         if size > 0:
-            self.source_pixel_size.append((size, pixels.get('PhysicalSizeYUnit', 'µm')))
+            self.source_pixel_size.append((size, pixels.get('PhysicalSizeYUnit', self.default_physical_unit)))
         size = float(pixels.get('PhysicalSizeZ', 0))
         if size > 0:
-            self.source_pixel_size.append((size, pixels.get('PhysicalSizeZUnit', 'µm')))
+            self.source_pixel_size.append((size, pixels.get('PhysicalSizeZUnit', self.default_physical_unit)))
 
+        position = []
+        for plane in ensure_list(pixels.get('Plane', [])):
+            position = [(plane.get('PositionX'), plane.get('PositionXUnit')),
+                        (plane.get('PositionY'), plane.get('PositionYUnit')),
+                        (plane.get('PositionZ'), plane.get('PositionZUnit'))]
+            c, z, t = plane.get('TheC'), plane.get('TheZ'), plane.get('TheT')
+
+        self.position = position
         self.source_mag = 0
         objective_id = images.get('ObjectiveSettings', {}).get('ID', '')
         for objective in ensure_list(self.metadata.get('Instrument', {}).get('Objective', [])):
@@ -99,7 +113,7 @@ class OmeSource:
             if nchannels == 3:
                 channels = [{'label': ''}]
             else:
-                channels = [{'label': ''}] * nchannels
+                channels = [{'label': str(channeli)} for channeli in range(nchannels)]
         self.channels = channels
 
     def _init_sizes(self):
@@ -151,13 +165,6 @@ class OmeSource:
     def get_source_dask(self):
         raise NotImplementedError('Implement method in subclass')
 
-    def get_output_dask(self):
-        data = self._get_output_dask()
-        return redimension_data(data, self.dimension_order, self.get_dimension_order())
-
-    def _get_output_dask(self):
-        raise NotImplementedError('Implement method in subclass')
-
     def get_mag(self) -> float:
         mag = self.source_mag
         # get effective mag at target pixel size
@@ -185,7 +192,7 @@ class OmeSource:
 
     def get_size(self) -> tuple:
         # size at target pixel size
-        return np.round(np.multiply(self.sizes[self.best_level], self.best_factor)).astype(int)
+        return tuple(np.round(np.multiply(self.sizes[self.best_level], self.best_factor)).astype(int))
 
     def get_size_xyzct(self) -> tuple:
         xyzct = list(self.sizes_xyzct[self.best_level]).copy()
@@ -216,7 +223,7 @@ class OmeSource:
     def get_thumbnail(self, target_size: tuple, precise: bool = False) -> np.ndarray:
         size, index = get_best_size(self.sizes, target_size)
         scale = np.divide(target_size, self.sizes[index])
-        image = self.get_yxc_image(self._asarray_level(index))
+        image, _ = self.get_yxc_image(self._asarray_level(index), t=0, z=0)
         if precise:
             thumbnail = precise_resize(image, scale)
         else:
@@ -227,7 +234,7 @@ class OmeSource:
         min_quantile = 0.001
         max_quantile = 0.999
 
-        if 'window' in self.channels[channeli]:
+        if channeli < len(self.channels) and 'window' in self.channels[channeli]:
             return self.channels[channeli].get('window')
 
         dtype = self.get_pixel_type()
@@ -240,32 +247,39 @@ class OmeSource:
         nsizes = len(self.sizes)
         if nsizes > 1:
             image = self._asarray_level(nsizes - 1)
-            image = image[:, channeli:channeli+1, ...]
+            image = np.asarray(image[:, channeli:channeli+1, ...])
             min, max = get_image_quantile(image, min_quantile), get_image_quantile(image, max_quantile)
         else:
             # do not query full size image
             min, max = start, end
         return {'start': start, 'end': end, 'min': min, 'max': max}
 
-    def get_yxc_image(self, image, t=0, z=0, c=None):
+    def get_yxc_image(self, image, t=None, z=None, c=None):
+        new_dimension_order = self.get_dimension_order()
         if z is not None:
             image = image[:, :, z, ...]
+            new_dimension_order = new_dimension_order.replace('z', '')
+
+        new_dimension_order = new_dimension_order.replace('c', '')
         if c is not None:
             image = image[:, c, ...]
         else:
             image = np.moveaxis(image, 1, -1)
+            new_dimension_order += 'c'
+
         if t is not None:
             image = image[t, ...]
-        return image
+            new_dimension_order = new_dimension_order.replace('t', '')
+        return image, new_dimension_order
 
     def render(self, image: np.ndarray, t: int = 0, z: int = 0, channels: list = []) -> np.ndarray:
         if image.ndim == 5:
-            image = self.get_yxc_image(image, t=t, z=z)
+            image, _ = self.get_yxc_image(image, t=t, z=z)
         new_image = np.zeros(list(image.shape[:2]) + [3], dtype=np.float32)
         tot_alpha = 0
         n = len(self.channels)
 
-        is_rgb = (self.get_nchannels() == 3 and n == 1)
+        is_rgb = (self.get_nchannels() == 3 and n <= 1)
         do_normalisation = (image.dtype.itemsize == 2)
 
         if not is_rgb:
@@ -280,8 +294,9 @@ class OmeSource:
                         channel_values = normalise_values(channel_values, window['min'], window['max'])
                     else:
                         channel_values = int2float_image(channel_values)
-                    if 'color' in channel and channel['color'] != '':
-                        rgba = channel['color']
+                    color = channel.get('color')
+                    if color:
+                        rgba = color
                     else:
                         rgba = [1, 1, 1, 1]
                     color = rgba[:3]
@@ -300,9 +315,11 @@ class OmeSource:
 
         return new_image
 
-    def asarray(self, x0: float = 0, y0: float = 0, x1: float = -1, y1: float = -1,
-                c: int = None, z: int = None, t: int = None,
-                pixel_size: list = []) -> np.ndarray:
+    def asarray(self, pixel_size: list = [], **slicing) -> np.ndarray:
+        # expects x0, x1, y0, y1, ...
+        x0, x1 = slicing.get('x0', 0), slicing.get('x1', -1)
+        y0, y1 = slicing.get('y0', 0), slicing.get('y1', -1)
+        c, t, z = slicing.get('c'), slicing.get('t'), slicing.get('z')
         # allow custom pixel size
         if pixel_size:
             level, factor, _ = get_best_level_factor(self, pixel_size)
@@ -317,14 +334,61 @@ class OmeSource:
             ox0, oy0 = np.round(np.divide([x0, y0], factor)).astype(int)
             ox1, oy1 = np.round(np.divide([x1, y1], factor)).astype(int)
         else:
-            ox0, oy0, ox1, oy1 = x0, y0, x1, y1
-        image0 = self._asarray_level(level, ox0, oy0, ox1, oy1, c, z, t)
+            ox0, ox1, oy0, oy1 = x0, x1, y0, y1
+        image0 = self._asarray_level(level=level, x0=ox0, x1=ox1, y0=oy0, y1=oy1, c=c, z=z, t=t)
         if np.mean(factor) != 1:
             size1 = x1 - x0, y1 - y0
             image = image_resize(image0, size1, dimension_order=self.get_dimension_order())
         else:
             image = image0
         return image
+
+    def asarray_um(self, **slicing):
+        pixel_size = self.get_pixel_size_micrometer()[:2]
+        slicing['x0'], slicing['x1'] = np.divide([slicing.get('x0'), slicing.get('x1')], pixel_size[0])
+        slicing['y0'], slicing['y1'] = np.divide([slicing.get('y0'), slicing.get('y1')], pixel_size[1])
+        return self.asarray(**slicing)
+
+    def asdask(self, chunk_size: tuple) -> da.Array:
+        chunk_shape = list(np.flip(chunk_size))
+        while len(chunk_shape) < 3:
+            chunk_shape = [1] + chunk_shape
+        chunk_shape = [self.get_nchannels()] + chunk_shape
+        while len(chunk_shape) < 5:
+            chunk_shape = [1] + chunk_shape
+        chunks = np.ceil(np.flip(self.get_size_xyzct()) / chunk_shape).astype(int)
+        w, h = self.get_size()
+
+        delayed_reader = dask.delayed(self.asarray)
+        dtype = self.get_pixel_type()
+
+        dask_times = []
+        for ti in range(chunks[0]):
+            dask_planes = []
+            for zi in range(chunks[2]):
+                dask_rows = []
+                for yi in range(chunks[3]):
+                    dask_row = []
+                    for xi in range(chunks[4]):
+                        shape = list(chunk_shape).copy()
+                        x0, x1 = xi * shape[4], (xi + 1) * shape[4]
+                        y0, y1 = yi * shape[3], (yi + 1) * shape[3]
+                        if x1 > w:
+                            x1 = w
+                            shape[4] = w - x0
+                        if y1 > h:
+                            y1 = h
+                            shape[3] = h - y0
+                        z = zi * shape[2]
+                        t = ti * shape[0]
+                        dask_tile = da.from_delayed(delayed_reader(x0=x0, x1=x1, y0=y0, y1=y1, z=z, t=t),
+                                                    shape=shape, dtype=dtype)
+                        dask_row.append(dask_tile)
+                    dask_rows.append(da.concatenate(dask_row, axis=4))
+                dask_planes.append(da.concatenate(dask_rows, axis=3))
+            dask_times.append(da.concatenate(dask_planes, axis=2))
+        dask_data = da.concatenate(dask_times, axis=0)
+        return dask_data
 
     def clone_empty(self) -> np.ndarray:
         return np.zeros(self.get_shape(), dtype=self.get_pixel_type())
@@ -338,16 +402,18 @@ class OmeSource:
                 x0, y0 = chunkx * chunk_size[0], chunky * chunk_size[1]
                 x1, y1 = min((chunkx + 1) * chunk_size[0], w), min((chunky + 1) * chunk_size[1], h)
                 indices = 0, 0, 0, y0, x0
-                yield indices, self.asarray(x0, y0, x1, y1)
+                yield indices, self.asarray(x0=x0, x1=x1, y0=y0, y1=y1)
 
     def get_metadata(self) -> dict:
         return self.metadata
 
+    #def create_xml_metadata(self, output_filename: str, combine_rgb: bool = True, pyramid_sizes_add: list = None) -> str:
+    #    return create_ome_metadata(self, output_filename, combine_rgb=combine_rgb, pyramid_sizes_add=pyramid_sizes_add)
+
     def _find_metadata(self):
         raise NotImplementedError('Implement method in subclass')
 
-    def _asarray_level(self, level: int, x0: float = 0, y0: float = 0, x1: float = -1, y1: float = -1,
-                       c: int = None, z: int = None, t: int = None) -> np.ndarray:
+    def _asarray_level(self, level: int, **slicing) -> np.ndarray:
         raise NotImplementedError('Implement method in subclass')
 
     def close(self):

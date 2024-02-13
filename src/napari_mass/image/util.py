@@ -103,11 +103,10 @@ def image_set_safe(image0, image1, offset0):
 
 
 def image_resize(image: np.ndarray, target_size0: tuple, dimension_order: str = 'yxc') -> np.ndarray:
-    if not isinstance(image, np.ndarray):
-        image = image.asarray()
     shape = image.shape
     x_index = dimension_order.index('x')
     y_index = dimension_order.index('y')
+    c_is_at_end = dimension_order.endswith('c')
     size = shape[x_index], shape[y_index]
     if np.mean(np.divide(size, target_size0)) < 1:
         interpolation = cv.INTER_CUBIC
@@ -116,26 +115,32 @@ def image_resize(image: np.ndarray, target_size0: tuple, dimension_order: str = 
     dtype0 = image.dtype
     image = ensure_unsigned_image(image)
     target_size = tuple(np.maximum(np.round(target_size0).astype(int), 1))
-    if dimension_order.startswith('yx'):
-        new_image = cv.resize(image, target_size, interpolation=interpolation)
+    if dimension_order in ['yxc', 'yx']:
+        new_image = cv.resize(np.asarray(image), target_size, interpolation=interpolation)
+    elif dimension_order == 'cyx':
+        new_image = np.moveaxis(image, 0, -1)
+        new_image = cv.resize(np.asarray(new_image), target_size, interpolation=interpolation)
+        new_image = np.moveaxis(new_image, -1, 0)
     else:
-        if 'z' in dimension_order:
-            z_index = dimension_order.index('z')
-        if 't' in dimension_order:
-            t_index = dimension_order.index('t')
+        ts = image.shape[dimension_order.index('t')] if 't' in dimension_order else 1
+        zs = image.shape[dimension_order.index('z')] if 'z' in dimension_order else 1
         target_shape = list(image.shape).copy()
         target_shape[x_index] = target_size[0]
         target_shape[y_index] = target_size[1]
         new_image = np.zeros(target_shape, dtype=image.dtype)
-        for t in range(image.shape[t_index]):
-            for z in range(image.shape[z_index]):
-                image1 = image[t, :, z, ...]
-                image1 = np.moveaxis(image1, 0, -1)
-                new_image1 = np.atleast_3d(cv.resize(image1, target_size, interpolation=interpolation))
-                new_image1 = np.moveaxis(new_image1, -1, 0)
-                new_image[t, :, z, ...] = new_image1
+        for t in range(ts):
+            for z in range(zs):
+                slices = get_numpy_slicing(dimension_order, z=z, t=t)
+                image1 = image[slices]
+                if not c_is_at_end:
+                    image1 = np.moveaxis(image1, 0, -1)
+                new_image1 = np.atleast_3d(cv.resize(np.asarray(image1), target_size, interpolation=interpolation))
+                if not c_is_at_end:
+                    new_image1 = np.moveaxis(new_image1, -1, 0)
+                new_image[slices] = new_image1
     new_image = convert_image_sign_type(new_image, dtype0)
     return new_image
+
 
 
 def precise_resize(image: np.ndarray, scale: np.ndarray, use_max: bool = False) -> np.ndarray:
@@ -222,7 +227,7 @@ def load_tiff(filename):
 
 
 def save_tiff(filename, image, tile_size=None, compression=None):
-    bigtiff = (image.size * image.itemsize > 4e+9)
+    bigtiff = (image.size * image.itemsize > 2 ** 32)
     if image.ndim == 3:
         # move channel axis (unless RGB)
         if image.shape[2] < image.shape[0] and image.shape[2] != 3:
@@ -260,11 +265,12 @@ def flatfield_correction(image0, dark=0, bright=1, clip=True):
 
 
 def get_image_crop(source, x, y, w, h, pixel_size=None):
-    x, y, w, h = int(x), int(y), int(w), int(h)
+    x0, y0, w, h = int(x), int(y), int(w), int(h)
+    x1, y1 = x0 + w, y0 + h
     if isinstance(source, np.ndarray):
-        cropped = source[y:y + h, x:x + w]
+        cropped = source[y0:y1, x0:x1]
     else:
-        cropped = source.get_yxc_image(source.asarray(x, y, x + w, y + h, pixel_size=pixel_size))
+        cropped, _ = source.get_yxc_image(source.asarray(x0=x0, x1=x1, y0=y0, y1=y1, pixel_size=pixel_size), t=0, z=0)
     return cropped
 
 
@@ -346,6 +352,22 @@ def redimension_data(data, old_order, new_order, **kwargs):
     new_indices = list(range(len(new_order)))
     new_data = np.moveaxis(new_data, old_indices, new_indices)
     return new_data
+
+
+def get_numpy_slicing(dimension_order, **slicing):
+    slices = []
+    for axis in dimension_order:
+        index = slicing.get(axis)
+        index0 = slicing.get(axis + '0')
+        index1 = slicing.get(axis + '1')
+        if index0 is not None and index1 is not None:
+            slice1 = slice(int(index0), int(index1))
+        elif index is not None:
+            slice1 = int(index)
+        else:
+            slice1 = slice(None)
+        slices.append(slice1)
+    return tuple(slices)
 
 
 def get_image_quantile(image: np.ndarray, quantile: float, axis=None) -> float:

@@ -48,7 +48,6 @@ sample:
   copy: {type: button, function: copy_sample, tip: 'Copy selected section, click view to paste'}
   detect: {type: button, function: detect_sample, tip: 'Automatic section detection'}
   order: {type: button, function: order_sample, tip: 'Automatic section Z stack ordering'}
-  propagate: {type: button, function: propagate_sample, tip: 'Propagate to all sections'}
 
 rois:
   sigma: {value: 8.0}
@@ -58,7 +57,3 @@ rois:
   merge_regions: {value: True}
   merge_intersection_ratio: {value: 0.33}
   filter_small_regions: {value: True}
-  propagate: {type: button, function: propagate_roi, tip: 'Propagate to all sections'}
-
-focus:
-  propagate: {type: button, function: propagate_focus, tip: 'Propagate to all sections'}
