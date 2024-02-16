@@ -270,7 +270,7 @@ def get_image_crop(source, x, y, w, h, pixel_size=None):
     if isinstance(source, np.ndarray):
         cropped = source[y0:y1, x0:x1]
     else:
-        cropped, _ = source.get_yxc_image(source.asarray(x0=x0, x1=x1, y0=y0, y1=y1, pixel_size=pixel_size), t=0, z=0)
+        cropped = source.render(source.asarray(pixel_size=pixel_size, x0=x0, x1=x1, y0=y0, y1=y1), source.get_dimension_order())
     return cropped
 
 

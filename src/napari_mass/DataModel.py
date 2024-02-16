@@ -74,13 +74,14 @@ class DataModel:
         logging.basicConfig(level=logging.INFO, format=log_format, datefmt=datefmt,
                             handlers=[logging.StreamHandler(), logging.FileHandler(log_filename, encoding='utf-8')],
                             encoding='utf-8', force=True)
+        for module in ['ome_zarr']:
+            logging.getLogger(module).setLevel(logging.WARNING)
         logging.info('Microscopy Array Section Setup logging started')
 
         self.data = DataFile()
         self.matches = FileDict()
         self.transforms = FileDict()
 
-        self.sections = {}
         self.order = []
         self.order_confidences = []
         self.stage_order = []
@@ -327,56 +328,60 @@ class DataModel:
             images = get_section_images(sections, self.source, pixel_size=self.output_pixel_size)
         return images
 
-    def extract_rois(self):
-        self.sample_overlay_image, self.sample_template = self.create_section_overlay_image('sample')
-        sample = self.sample_template
+    def init_sample_template(self):
+        sample = self.data.get_values(DATA_TEMPLATE_KEY + '/sample')
+        if not sample:
+            values = self.data.get_values(DATA_SECTIONS_KEY + '/*/sample')
+            sections = [Section(value) for value in values]
+            element_size, large_size0 = get_section_sizes(sections)
+            padded_size_factor = 1
+            large_size = np.multiply(large_size0, padded_size_factor)
+            centre, size, rotation = (np.divide(large_size, 2), element_size.astype(float), 0)
+            sample = Section(cv.boxPoints((centre, size, rotation)))
+            self.data.add_value(DATA_TEMPLATE_KEY + '/sample', sample)
+            self.data.save()
 
-        values = self.data.get_values(DATA_TEMPLATE_KEY + '/rois')
-        if len(values) > 0:
+    def extract_rois(self):
+        sample = self.data.get_values(DATA_TEMPLATE_KEY + '/sample')[0]
+        rois = self.data.get_values(DATA_TEMPLATE_KEY + '/rois/*')
+        if len(rois) > 0:
             section_points = []
             section_centers = []
-            for value in values.values():
-                roi = Section(value)
-                if roi is not None:
-                    roi.center -= sample.center
-                    roi.polygon -= sample.center
-                    angle = -90
-                    if roi.center[1] > sample.center[1]:
-                        angle = norm_angle(angle + 180)
-                    h = create_transform(angle=angle)
-                    section_points.append(apply_transform(roi.polygon, h))
-                    section_centers.append(apply_transform([roi.center], h)[0])
+            for roi in rois:
+                new_center = np.array(roi['center']) - sample['center']
+                new_polygon = np.array(roi['polygon']) - sample['center']
+                angle = -90
+                if new_center[1] > new_center[1]:
+                    angle = norm_angle(angle + 180)
+                h = create_transform(angle=angle)
+                section_points.append(apply_transform(new_polygon, h))
+                section_centers.append(apply_transform([new_center], h)[0])
             self.template_section_points = section_points
             self.template_section_centers = section_centers
         else:
             logging.warning('No ROI changes')
 
     def propagate_rois(self):
-        indices = set()
-        for section in self.sections.values():
-            if 'rois' in section:
-                for index in section['rois']:
-                    indices.add(index)
-        if len(indices) == 0:
-            roi_index = 0
-        else:
-            roi_index = max(indices) + 1
-
-        for section in self.sections.values():
-            sample_section = section['sample']
-            for index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
+        for section in self.data[DATA_SECTIONS_KEY].values():
+            section['rois'] = {}
+            sample = section['sample']
+            for roi_index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
                 # transform corners of template section (relative from magnet center), using transform of each section
-                h = create_transform(angle=sample_section.angle, translate=sample_section.center)
+                h = create_transform(angle=sample['angle'], translate=sample['center'])
                 new_section_points = apply_transform(section_points, h)
                 new_section_center = apply_transform([section_center], h)[0]
-                value = {'polygon': new_section_points, 'center': new_section_center, 'angle': sample_section.angle,
-                         'confidence': 1}
-                if 'rois' not in section:
-                    section['rois'] = {}
-                section['rois'][roi_index + index] = Section(value)
-        self.sample_sections_finalised = True
+                section['rois'][roi_index] = {
+                    'polygon': new_section_points.tolist(),
+                    'center': new_section_center.tolist(),
+                    'angle': sample['angle'],
+                    'confidence': 1}
+        self.data.save()
 
-
+    def get_output_scale(self):
+        pixel_size = list(self.output_pixel_size)
+        if len(pixel_size) < 2:
+            pixel_size = pixel_size * 2
+        return pixel_size[:2]
 
 
 
@@ -680,7 +685,7 @@ class DataModel:
 
     def load_data(self):
         self.data.load()
-        self.sections = self.load_objects(self.data.get_section(DATA_SECTIONS_KEY))
+        #self.sections = self.load_objects(self.data.get_section(DATA_SECTIONS_KEY))
         self.matches.load()
         self.transforms.load()
         self.order = self.data.get_section('serial_order').get('order', [])

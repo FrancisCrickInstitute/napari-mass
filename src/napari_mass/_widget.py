@@ -400,9 +400,13 @@ class MassWidget(QSplitter):
 
     def update_section_order(self):
         self.model.update_section_order(self.section_order)
+        self.update_data_layers()
+
+    def update_data_layers(self):
         data_layers = self.model.init_data_layers()
         for layer_name, layer_info in data_layers.items():
             layer_index = self.layer_names.index(layer_name)
+            # *** TODO: check this doesn't trigger shape events!!
             self.main_viewer.layers[layer_index].data = layer_info[0]
 
     def detect_sample(self):
@@ -426,11 +430,13 @@ class MassWidget(QSplitter):
         self.template_viewer.layers.clear()
         layer_name = self.main_viewer.layers.selection.active.name
         image_stack = np.array(self.model.get_section_images(layer_name))
+        layer_scale = self.model.get_output_scale()
         if len(image_stack) > 0:
-            self.template_viewer.add_image(image_stack)
+            self.template_viewer.add_image(image_stack, scale=layer_scale)
             self.template_viewer.dims.set_point(0, 0)  # set index to 0
         else:
             QMessageBox.warning(self, 'MASS', 'No layer data to populate')
+        self.model.init_sample_template()
         layer_infos = self.model.init_data_layers(DATA_TEMPLATE_KEY)
         if layer_infos:
             for layer_info in layer_infos.values():
@@ -443,7 +449,7 @@ class MassWidget(QSplitter):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
         self.model.extract_rois()
         self.model.propagate_rois()
-        # update main viewer data layers
+        self.update_data_layers()   # doesn't seem to redraw layers
 
 
 widget: MassWidget

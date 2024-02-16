@@ -40,15 +40,19 @@ class PathControl:
             if file_type.startswith('image'):
                 filter += 'Images (*.tif *.tiff *.zarr);;'
                 default_ext = '.tif'
-            if 'json' in file_type:
+            elif file_type.endswith('mass'):
+                filter += 'MASS project files (*.mass.yml *.mass.yaml);;'
+                if default_ext is None:
+                    default_ext = '.yml'
+            elif file_type.endswith('json'):
                 filter += 'JSON files (*.json);;'
                 if default_ext is None:
                     default_ext = '.json'
-            if 'yml' in file_type or 'yaml' in file_type:
+            elif file_type.endswith('yml') or file_type.endswith('yaml'):
                 filter += 'YAML files (*.yml *.yaml);;'
                 if default_ext is None:
                     default_ext = '.yml'
-            if 'xml' in file_type:
+            elif file_type.endswith('xml'):
                 filter += 'XML files (*.xml);;'
                 if default_ext is None:
                     default_ext = '.xml'

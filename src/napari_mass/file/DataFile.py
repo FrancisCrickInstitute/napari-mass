@@ -65,6 +65,8 @@ class DataFile(FileDict):
     def set_value(self, keys, index, value):
         if not isinstance(keys, list):
             keys = deserialise(keys, '/')
+        if hasattr(value, 'to_dict'):
+            value = value.to_dict()
 
         final_key = keys[-1]
         is_index = (final_key == '*')
@@ -91,6 +93,8 @@ class DataFile(FileDict):
             dct = self
         if not isinstance(keys, list):
             keys = deserialise(keys, '/')
+        if hasattr(value, 'to_dict'):
+            value = value.to_dict()
 
         for keyi, key in enumerate(keys):
             is_final_key = (keyi == len(keys) - 1)

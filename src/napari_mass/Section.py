@@ -216,8 +216,10 @@ def get_section_images(sections, source, pixel_size=None):
     return images
 
 
-def get_section_sizes(sections, pixel_size):
-    sizes = np.divide([section.get_size() for section in sections], pixel_size[:2])
+def get_section_sizes(sections, pixel_size=None):
+    sizes = [section.get_size() for section in sections]
+    if pixel_size:
+        sizes = np.divide(sizes, pixel_size[:2])
     mean_size = np.median(sizes, 0).astype(int)
     padded_size = np.round(mean_size * 1.25).astype(int)
     return mean_size, padded_size

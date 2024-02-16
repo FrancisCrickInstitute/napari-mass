@@ -223,12 +223,14 @@ class OmeSource:
     def get_thumbnail(self, target_size: tuple, precise: bool = False) -> np.ndarray:
         size, index = get_best_size(self.sizes, target_size)
         scale = np.divide(target_size, self.sizes[index])
-        image, _ = self.get_yxc_image(self._asarray_level(index), t=0, z=0)
+        new_dimension_order = 'yxc'
+        image = redimension_data(self._asarray_level(index), self.get_dimension_order(), new_dimension_order, t=0, z=0)
         if precise:
             thumbnail = precise_resize(image, scale)
         else:
-            thumbnail = self.render(image_resize(image, target_size))
-        return thumbnail
+            thumbnail = image_resize(image, target_size)
+        thumbnail_rgb = self.render(thumbnail, new_dimension_order)
+        return thumbnail_rgb
 
     def get_channel_window(self, channeli):
         min_quantile = 0.001
@@ -254,32 +256,13 @@ class OmeSource:
             min, max = start, end
         return {'start': start, 'end': end, 'min': min, 'max': max}
 
-    def get_yxc_image(self, image, t=None, z=None, c=None):
-        new_dimension_order = self.get_dimension_order()
-        if z is not None:
-            image = image[:, :, z, ...]
-            new_dimension_order = new_dimension_order.replace('z', '')
-
-        new_dimension_order = new_dimension_order.replace('c', '')
-        if c is not None:
-            image = image[:, c, ...]
-        else:
-            image = np.moveaxis(image, 1, -1)
-            new_dimension_order += 'c'
-
-        if t is not None:
-            image = image[t, ...]
-            new_dimension_order = new_dimension_order.replace('t', '')
-        return image, new_dimension_order
-
-    def render(self, image: np.ndarray, t: int = 0, z: int = 0, channels: list = []) -> np.ndarray:
-        if image.ndim == 5:
-            image, _ = self.get_yxc_image(image, t=t, z=z)
+    def render(self, image: np.ndarray, source_dimension_order: str, t: int = 0, z: int = 0, channels: list = []) -> np.ndarray:
+        image = redimension_data(image, source_dimension_order, 'yxc', t=t, z=z)
         new_image = np.zeros(list(image.shape[:2]) + [3], dtype=np.float32)
         tot_alpha = 0
         n = len(self.channels)
 
-        is_rgb = (self.get_nchannels() == 3 and n <= 1)
+        is_rgb = (self.get_nchannels() == 3 and (n <= 1 or n == 3))
         do_normalisation = (image.dtype.itemsize == 2)
 
         if not is_rgb:
@@ -403,9 +386,6 @@ class OmeSource:
                 x1, y1 = min((chunkx + 1) * chunk_size[0], w), min((chunky + 1) * chunk_size[1], h)
                 indices = 0, 0, 0, y0, x0
                 yield indices, self.asarray(x0=x0, x1=x1, y0=y0, y1=y1)
-
-    def get_metadata(self) -> dict:
-        return self.metadata
 
     #def create_xml_metadata(self, output_filename: str, combine_rgb: bool = True, pyramid_sizes_add: list = None) -> str:
     #    return create_ome_metadata(self, output_filename, combine_rgb=combine_rgb, pyramid_sizes_add=pyramid_sizes_add)
