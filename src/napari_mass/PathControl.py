@@ -7,10 +7,11 @@ from napari_mass.util import get_dict
 class PathControl:
     FOLDER_PLACEHOLDER = '[this folder]'
 
-    def __init__(self, template, path_widget, params, function=None):
+    def __init__(self, template, path_widget, params, param_label, function=None):
         self.template = template
         self.path_widget = path_widget
         self.params = params
+        self.param_label = param_label
         self.function = function
         self.path_type = template['type']
         self.path_button = QPushButton('...')
@@ -21,11 +22,9 @@ class PathControl:
 
     def show_dialog(self):
         value = self.path_widget.text()
-        if not value:
-            project_path = get_dict(self.params, 'project.filename')
-            if project_path is not None:
-                base_path = os.path.dirname(project_path)
-                value = base_path
+        value0 = get_dict(self.params, self.param_label)
+        if not value and value0:
+            value = value0
         types = self.path_type.split('.')[1:]
         dialog_type = types[0].lower()
         caption = self.template.get('tip')
@@ -40,10 +39,14 @@ class PathControl:
             if file_type.startswith('image'):
                 filter += 'Images (*.tif *.tiff *.zarr);;'
                 default_ext = '.tif'
-            elif file_type.endswith('mass'):
-                filter += 'MASS project files (*.mass.yml *.mass.yaml);;'
+            elif file_type.endswith('massproject'):
+                filter += 'MASS project files (*.massproject.*);;'
                 if default_ext is None:
-                    default_ext = '.yml'
+                    default_ext = '.massproject.yml'
+            elif file_type.endswith('mass'):
+                filter += 'MASS project files (*.mass.*);;'
+                if default_ext is None:
+                    default_ext = '.mass.json'
             elif file_type.endswith('json'):
                 filter += 'JSON files (*.json);;'
                 if default_ext is None:
@@ -90,7 +93,7 @@ class PathControl:
         self.finish_result(filename)
 
     def finish_result(self, result):
-        if result is not None:
+        if result:
             if not self.is_folder and os.path.splitext(result)[1] == '':
                 result += self.default_ext
             self.path_widget.setText(result)

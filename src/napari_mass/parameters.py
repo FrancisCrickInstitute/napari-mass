@@ -1,8 +1,8 @@
 NAME = 'MASS'
-VERSION = '0.3.1'
+VERSION = '0.4.1'
 
 RESOURCE_DIR = 'resources/'
-PROJECT_TEMPLATE = RESOURCE_DIR + 'project_template.mass.yml'
+PROJECT_TEMPLATE = RESOURCE_DIR + 'template.massproject.yml'
 
 READER_SUPPORTED_TYPES = ['.tif', '.tiff', '.zarr']
 

@@ -254,7 +254,10 @@ class OmeSource:
         else:
             # do not query full size image
             min, max = start, end
-        return {'start': start, 'end': end, 'min': min, 'max': max}
+        window = {'start': start, 'end': end, 'min': min, 'max': max}
+        if channeli < len(self.channels):
+            self.channels[channeli]['window'] = window
+        return window
 
     def render(self, image: np.ndarray, source_dimension_order: str, t: int = 0, z: int = 0, channels: list = []) -> np.ndarray:
         image = redimension_data(image, source_dimension_order, 'yxc', t=t, z=z)

@@ -17,9 +17,12 @@ def modify_datafile(filename):
     data.add_value([DATA_TEMPLATE_KEY, 'sample'], {'new'})
     data.add_value([DATA_TEMPLATE_KEY, 'sample'], {'new2'})
     template_sample = data.get_values([DATA_TEMPLATE_KEY, 'sample'])
+
+    data.remove_value([DATA_TEMPLATE_KEY, 'rois', '*'], 0)
+
     pass
 
 
 if __name__ == '__main__':
-    filename = 'D:/slides/EM04676_02/mass/mass_data.json'
+    filename = 'D:/slides/EM04676_02/mass/data.mass.json'
     modify_datafile(filename)

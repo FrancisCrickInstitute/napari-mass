@@ -70,13 +70,16 @@ class DataFile(FileDict):
 
         final_key = keys[-1]
         is_index = (final_key == '*')
-        for item in self.get_values(keys[:-1]):
+        for item_index, item in enumerate(self.get_values(keys[:-1])):
             if is_index:
                 n = len(item)
-                final_key = index
+                if index < n:
+                    final_key = list(item.keys())[index]
+                else:
+                    final_key = None
             else:
                 n = 1
-            if index < n:
+            if final_key in item:
                 if value:
                     # set
                     item[final_key] = value

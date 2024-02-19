@@ -133,6 +133,7 @@ class DataModel:
         return self.layers
 
     def init_image_layers(self):
+        image_layers = []
         params = self.params
         input_params = params['input']
         output_params = params['project']['output']
@@ -154,9 +155,9 @@ class DataModel:
 
         self.source = get_source(base_folder, input_filename)
         source = self.source
-        self.source_pixel_size = source.get_pixel_size_micrometer()
-
-        #self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
+        if source:
+            self.source_pixel_size = source.get_pixel_size_micrometer()
+            #self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
 
         # hq fluor image
         hq_params = input_params.get('fluor_hq')
@@ -182,61 +183,61 @@ class DataModel:
             self.fluor_hq_source = source
 
         # set image layers
-        if isinstance(source, OmeZarrSource):
-            reader = Reader(parse_url(join_path(base_folder, input_filename)))
-            image_layers = transform(reader())()
-        else:
-            image_layers = []
-            source_pixel_size = source.get_pixel_size_micrometer()[:2]
-            data = source.get_source_dask()
-            channels = source.get_channels()
-            nchannels = len(channels)
-            channel_names = []
-            scales = []
-            blendings = []
-            contrast_limits = []
-            contrast_limits_range = []
-            colormaps = []
-            for channeli, channel in enumerate(channels):
-                channel_name = channel.get('label')
-                if not channel_name:
-                    channel_name = get_filetitle(source.source_reference)
-                    if nchannels > 1:
-                        channel_name += f' #{channeli}'
-                blending_mode = 'additive'
-                channel_color = channel.get('color')
-                if channel_color:
-                    channel_color = tuple(channel_color)
-                window = source.get_channel_window(channeli)
-                window_limit = window['min'], window['max']
-                window_range = window['start'], window['end']
-                if nchannels > 1:
-                    channel_names.append(channel_name)
-                    blendings.append(blending_mode)
-                    contrast_limits.append(window_limit)
-                    contrast_limits_range.append(window_range)
-                    colormaps.append(channel.get('color'))
-                    scales.append(source_pixel_size)
-                else:
-                    channel_names = channel_name
-                    blendings = blending_mode
-                    contrast_limits = window_limit
-                    contrast_limits_range = window_range
-                    colormaps = channel_color
-                    scales = source_pixel_size
-
-            if 'c' in source.dimension_order:
-                c_index = source.dimension_order.index('c')
+        if source:
+            if isinstance(source, OmeZarrSource):
+                reader = Reader(parse_url(join_path(base_folder, input_filename)))
+                image_layers = transform(reader())()
             else:
-                c_index = None
-            source_metadata = {'name': channel_names,
-                               'blending': blendings,
-                               'scale': scales,
-                               'contrast_limits': contrast_limits,
-                               #'contrast_limits_range': contrast_limits_range,     # not supported as parameter
-                               'colormap': colormaps,
-                               'channel_axis': c_index}
-            image_layers.append((data, source_metadata, 'image'))
+                source_pixel_size = source.get_pixel_size_micrometer()[:2]
+                data = source.get_source_dask()
+                channels = source.get_channels()
+                nchannels = len(channels)
+                channel_names = []
+                scales = []
+                blendings = []
+                contrast_limits = []
+                contrast_limits_range = []
+                colormaps = []
+                for channeli, channel in enumerate(channels):
+                    channel_name = channel.get('label')
+                    if not channel_name:
+                        channel_name = get_filetitle(source.source_reference)
+                        if nchannels > 1:
+                            channel_name += f' #{channeli}'
+                    blending_mode = 'additive'
+                    channel_color = channel.get('color')
+                    if channel_color:
+                        channel_color = tuple(channel_color)
+                    window = source.get_channel_window(channeli)
+                    window_limit = window['min'], window['max']
+                    window_range = window['start'], window['end']
+                    if nchannels > 1:
+                        channel_names.append(channel_name)
+                        blendings.append(blending_mode)
+                        contrast_limits.append(window_limit)
+                        contrast_limits_range.append(window_range)
+                        colormaps.append(channel.get('color'))
+                        scales.append(source_pixel_size)
+                    else:
+                        channel_names = channel_name
+                        blendings = blending_mode
+                        contrast_limits = window_limit
+                        contrast_limits_range = window_range
+                        colormaps = channel_color
+                        scales = source_pixel_size
+
+                if 'c' in source.dimension_order:
+                    c_index = source.dimension_order.index('c')
+                else:
+                    c_index = None
+                source_metadata = {'name': channel_names,
+                                   'blending': blendings,
+                                   'scale': scales,
+                                   'contrast_limits': contrast_limits,
+                                   #'contrast_limits_range': contrast_limits_range,     # not supported as parameter
+                                   'colormap': colormaps,
+                                   'channel_axis': c_index}
+                image_layers.append((data, source_metadata, 'image'))
         return image_layers
 
     def get_source_contrast_windows(self):
@@ -358,8 +359,11 @@ class DataModel:
                 section_centers.append(apply_transform([new_center], h)[0])
             self.template_section_points = section_points
             self.template_section_centers = section_centers
+            return True
         else:
-            logging.warning('No ROI changes')
+            self.template_section_points = []
+            self.template_section_centers = []
+            return False
 
     def propagate_rois(self):
         for section in self.data[DATA_SECTIONS_KEY].values():
@@ -1165,6 +1169,7 @@ class DataModel:
 
 
 def get_source(base_folder, input, input_filename=None):
+    source = None
     channel = ''
     source_pixel_size = None
     pixel_size = None
@@ -1178,17 +1183,20 @@ def get_source(base_folder, input, input_filename=None):
     else:
         filename0 = input
     filename = join_path(base_folder, filename0)
-    ext = os.path.splitext(filename)[1]
-    if 'zar' in ext:
-        source = OmeZarrSource(filename, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
-    elif 'tif' in ext:
-        source = TiffSource(filename, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
+    if os.path.exists(filename):
+        ext = os.path.splitext(filename)[1]
+        if 'zar' in ext:
+            source = OmeZarrSource(filename, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
+        elif 'tif' in ext:
+            source = TiffSource(filename, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
+        else:
+            source = cv_load(filename)
+            if channel.isnumeric():
+                source = source[..., channel]
+        s = f'Image source: {filename}'
+        if channel != '':
+            s += f' channel: {channel}'
+        logging.info(s)
     else:
-        source = cv_load(filename)
-        if channel.isnumeric():
-            source = source[..., channel]
-    s = f'Image source: {filename}'
-    if channel != '':
-        s += f' channel: {channel}'
-    logging.info(s)
+        logging.warning(f'File path does not exist: {filename}')
     return source

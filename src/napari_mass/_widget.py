@@ -60,9 +60,11 @@ class MassWidget(QSplitter):
         self.enable_tabs(False, 1)
 
     def create_model(self):
+        print('creating model')
         # TODO: try to move import to top - reason this work-around works is unclear
         from napari_mass.DataModel import DataModel
         self.model = DataModel(self.params)
+        print('model created')
 
     def set_model_params(self):
         self.model.set_params(self.params)
@@ -99,6 +101,8 @@ class MassWidget(QSplitter):
             self.main_viewer.layers.events.inserted.connect(self.on_layer_added)
         self.enable_tabs()
         self.check_enabled_layers()
+        self.populate_template_button.setEnabled(True)
+        self.propagate_template_button.setEnabled(True)
         return layer_infos
 
     def clear_controls(self):
@@ -108,8 +112,10 @@ class MassWidget(QSplitter):
         self.tab_index = 0
 
     def load_params(self, path):
+        print('loading template parameters')
         with open(path, 'r') as infile:
             self.params = yaml.load(infile, Loader=yaml.Loader)
+        print('template parameters loaded')
 
     def create_view_widget(self, viewer):
         widget = QWidget()
@@ -117,12 +123,14 @@ class MassWidget(QSplitter):
         layout.setAlignment(Qt.AlignTop)
         viewer_widget = QtViewerModelWrap(self.main_viewer, viewer)
         layout.addWidget(viewer_widget, 0, 0, 1, -1)
-        populate_template_button = QPushButton('Populate')
-        populate_template_button.clicked.connect(self.on_populate_template_clicked)
-        propagate_template_button = QPushButton('Propagate')
-        propagate_template_button.clicked.connect(self.on_propagate_template_clicked)
-        layout.addWidget(populate_template_button, 1, 0)
-        layout.addWidget(propagate_template_button, 1, 1)
+        self.populate_template_button = QPushButton('Populate')
+        self.populate_template_button.setEnabled(False)
+        self.populate_template_button.clicked.connect(self.on_populate_template_clicked)
+        self.propagate_template_button = QPushButton('Propagate')
+        self.propagate_template_button.setEnabled(False)
+        self.propagate_template_button.clicked.connect(self.on_propagate_template_clicked)
+        layout.addWidget(self.populate_template_button, 1, 0)
+        layout.addWidget(self.propagate_template_button, 1, 1)
         widget.setLayout(layout)
         return widget
 
@@ -163,6 +171,7 @@ class MassWidget(QSplitter):
                 function = getattr(self, template['function'])
 
             value_type = None
+            var_widget = None
             if 'type' in template:
                 value_type = template['type'].lower()
             elif 'value' in template:
@@ -217,14 +226,14 @@ class MassWidget(QSplitter):
                 layout.addWidget(var_widget, i, 0, 1, -1)
 
             if value_type is not None and value_type.startswith('path'):
-                path_control = PathControl(template, var_widget, self.params, function=function)
+                path_control = PathControl(template, var_widget, self.params, param_label, function=function)
                 layout.addWidget(path_control.get_button_widget(), i, 2)
                 self.path_controls[param_label] = path_control
 
             if 'edit' in template and not template['edit']:
                 var_widget.setReadOnly(True)
 
-        #layout.setContentsMargins(0, 0, 0, 0)  # Tighten up margins
+        layout.setContentsMargins(0, 0, 0, 0)  # Tighten up margins
         widget.setLayout(layout)
         return widget
 
@@ -429,27 +438,30 @@ class MassWidget(QSplitter):
     def on_populate_template_clicked(self):
         self.template_viewer.layers.clear()
         layer_name = self.main_viewer.layers.selection.active.name
-        image_stack = np.array(self.model.get_section_images(layer_name))
-        layer_scale = self.model.get_output_scale()
-        if len(image_stack) > 0:
-            self.template_viewer.add_image(image_stack, scale=layer_scale)
-            self.template_viewer.dims.set_point(0, 0)  # set index to 0
+        if layer_name in ['magnet', 'sample']:
+            image_stack = np.array(self.model.get_section_images(layer_name))
+            layer_scale = self.model.get_output_scale()
+            if len(image_stack) > 0:
+                self.template_viewer.add_image(image_stack, scale=layer_scale)
+                self.template_viewer.dims.set_point(0, 0)  # set index to 0
+                self.model.init_sample_template()
+                layer_infos = self.model.init_data_layers(DATA_TEMPLATE_KEY)
+                if layer_infos:
+                    for layer_info in layer_infos.values():
+                        layer = self.template_viewer.add_layer(Layer.create(*layer_info))
+                        layer.events.data.connect(self.on_template_data_changed)
+                    main_layer = self.main_viewer.layers.selection.active
+                    self.select_template_layer(main_layer.name)
+            else:
+                QMessageBox.warning(self, 'MASS', 'No layer data to populate')
         else:
-            QMessageBox.warning(self, 'MASS', 'No layer data to populate')
-        self.model.init_sample_template()
-        layer_infos = self.model.init_data_layers(DATA_TEMPLATE_KEY)
-        if layer_infos:
-            for layer_info in layer_infos.values():
-                layer = self.template_viewer.add_layer(Layer.create(*layer_info))
-                layer.events.data.connect(self.on_template_data_changed)
-            main_layer = self.main_viewer.layers.selection.active
-            self.select_template_layer(main_layer.name)
+            QMessageBox.warning(self, 'MASS', 'Invalid layer selected')
 
     def on_propagate_template_clicked(self):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
-        self.model.extract_rois()
-        self.model.propagate_rois()
-        self.update_data_layers()
+        if self.model.extract_rois():
+            self.model.propagate_rois()
+            self.update_data_layers()
 
 
 widget: MassWidget
