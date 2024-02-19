@@ -405,9 +405,9 @@ class MassWidget(QSplitter):
     def update_data_layers(self):
         data_layers = self.model.init_data_layers()
         for layer_name, layer_info in data_layers.items():
-            layer_index = self.layer_names.index(layer_name)
-            # *** TODO: check this doesn't trigger shape events!!
-            self.main_viewer.layers[layer_index].data = layer_info[0]
+            if layer_name in self.layer_names:
+                self.main_viewer.layers.remove(layer_name)
+            self.main_viewer.add_layer(Layer.create(*layer_info))
 
     def detect_sample(self):
         pass
@@ -449,7 +449,7 @@ class MassWidget(QSplitter):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
         self.model.extract_rois()
         self.model.propagate_rois()
-        self.update_data_layers()   # doesn't seem to redraw layers
+        self.update_data_layers()
 
 
 widget: MassWidget

@@ -350,7 +350,7 @@ class DataModel:
             for roi in rois:
                 new_center = np.array(roi['center']) - sample['center']
                 new_polygon = np.array(roi['polygon']) - sample['center']
-                angle = -90
+                angle = 0
                 if new_center[1] > new_center[1]:
                     angle = norm_angle(angle + 180)
                 h = create_transform(angle=angle)
