@@ -7,6 +7,6 @@ from napari_mass._widget import MassWidget
 def test_mass_widget(make_napari_viewer):
     viewer = make_napari_viewer()
 
-    dock_widget, plugin_widget = viewer.window.add_plugin_dock_widget('napari-mass')
+    mass_widget = MassWidget(viewer)
 
-    assert dock_widget is not None
+    assert mass_widget is not None
