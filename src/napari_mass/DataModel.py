@@ -73,7 +73,7 @@ class DataModel:
         datefmt = '%Y-%m-%d %H:%M:%S'
         logging.basicConfig(level=logging.INFO, format=log_format, datefmt=datefmt,
                             handlers=[logging.StreamHandler(), logging.FileHandler(log_filename, encoding='utf-8')],
-                            encoding='utf-8', force=True)
+                            force=True)   # parameter: encoding='utf-8' - requires logging >= 3.9
         for module in ['ome_zarr']:
             logging.getLogger(module).setLevel(logging.WARNING)
         logging.info('Microscopy Array Section Setup logging started')
