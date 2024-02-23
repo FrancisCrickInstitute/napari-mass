@@ -463,5 +463,9 @@ class MassWidget(QSplitter):
             self.model.propagate_rois()
             self.update_data_layers()
 
+    def close(self):
+        self.template_viewer.close()
+        super().close()
+
 
 widget: MassWidget
