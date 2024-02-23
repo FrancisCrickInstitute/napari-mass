@@ -10,5 +10,3 @@ def test_mass_widget(make_napari_viewer):
     mass_widget = MassWidget(viewer)
 
     assert mass_widget is not None
-
-    mass_widget.close()
