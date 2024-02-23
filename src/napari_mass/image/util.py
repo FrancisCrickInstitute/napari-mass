@@ -715,21 +715,6 @@ def compare_image_dist(image0, image1):
     return dif, rgb_max, rgb_mean, psnr
 
 
-def get_shape_stats(contour):
-    center, lengths, angle0 = get_rotated_rect(contour)
-    skewness = abs(get_skewness(contour, angle0)) if angle0 is not None else None
-    angle = norm_rotation_angle(angle0)
-    return center, lengths, angle, skewness
-
-
-def get_shape_stats2(contour):
-    center, lengths, _ = get_rotated_rect(contour)
-    angle0 = get_max_edge_angle(contour)
-    skewness = abs(get_skewness(contour, angle0)) if angle0 is not None else None
-    angle = norm_rotation_angle(angle0)
-    return center, lengths, angle, skewness
-
-
 def test_detect_contour(contour0, image=None):
     min_contour = np.min(contour0, 0)
     max_contour = np.max(contour0, 0)

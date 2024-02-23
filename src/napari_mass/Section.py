@@ -22,7 +22,7 @@ class Section:
             self.center = None
             self.angle = None
             self.confidence = 1
-        center, lengths, angle, skewness = get_shape_stats2(self.polygon)
+        center, lengths, angle, skewness = get_shape_stats(self.polygon)
         self.lengths = lengths
         self.skewness = skewness
         if self.center is None:

@@ -28,6 +28,17 @@ def area2radius(area):
     return math.sqrt(area / math.pi)
 
 
+def get_shape_stats(data):
+    center, lengths, _ = get_rotated_rect(data)
+    angle0 = get_max_edge_angle(data)
+    # correct orientation using skewness check
+    if get_skewness(data, angle0) > 0:
+        angle0 += 180
+    skewness = get_skewness(data, angle0)
+    angle = norm_rotation_angle(angle0)
+    return center, lengths, angle, skewness
+
+
 def get_moments_center(moments, offset=(0, 0)):
     return np.array([moments['m10'], moments['m01']]) / moments['m00'] + np.array(offset)
 
@@ -66,7 +77,7 @@ def get_moments_lengths(moments):
 
 def get_skewness(data, angle):
     # rotate for simplified 1d skewness calculation
-    rotated_data = apply_transform(data - np.mean(data, 0), create_transform(angle=angle))
+    rotated_data = apply_transform(data - get_center(data), create_transform(angle=angle))
     return skew(rotated_data[:, 1])
 
 
@@ -76,19 +87,18 @@ def get_angle(data):
     mu20 = moments['mu20']
     mu02 = moments['mu02']
     theta = 0.5 * math.atan2(2 * mu11, mu20 - mu02)
+    angle = np.rad2deg(theta)
     if data.shape[-1] != 2:
         # convert image to coordinates
         data = np.flip(np.transpose(np.where(data)), axis=1)
     # correct orientation using skewness check
-    if get_skewness(data, np.rad2deg(theta)) > 0:
-        theta += math.pi
-        if theta > math.pi:
-            theta -= 2 * math.pi
-    return theta
+    if get_skewness(data, angle) > 0:
+        angle += 180
+    return norm_angle(angle)
 
 
 def get_norm_rotation_angle_deg(data):
-    angle = np.rad2deg(get_angle(data))
+    angle = get_angle(data)
     return norm_rotation_angle(angle)
 
 
@@ -277,7 +287,7 @@ def get_transform_center(transform):
 def get_rotated_rect(data, offset=(0, 0)):
     center = get_center(data, offset)
     size = get_lengths(data)
-    angle = np.rad2deg(get_angle(data))
+    angle = get_angle(data)
     return center, size, angle
 
 

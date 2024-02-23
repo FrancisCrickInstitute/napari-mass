@@ -75,11 +75,9 @@ class DataFile(FileDict):
                 n = len(item)
                 if index < n:
                     final_key = list(item.keys())[index]
-                else:
-                    final_key = None
             else:
                 n = 1
-            if final_key in item:
+            if index < n:
                 if value:
                     # set
                     item[final_key] = value
@@ -117,7 +115,8 @@ class DataFile(FileDict):
         return False
 
     def remove_value(self, keys, index):
-        return self.set_value(keys, index, None)
+        old_value = self.set_value(keys, index, None)
+        return old_value is not None
 
     def exists(self, keys, dct=None):
         if dct is None:

@@ -11,7 +11,7 @@ def modify_datafile(filename):
     data.set_value([DATA_SECTIONS_KEY, '*', 'sample'], 5, {'test'})
     data.set_value([DATA_SECTIONS_KEY, '*', 'rois', '*'], 5, {'test'})
     data.remove_value([DATA_SECTIONS_KEY, '*', 'rois', '*'], 2)
-    data.remove_value([DATA_SECTIONS_KEY, '*', 'sample'], 1)
+    data.remove_value([DATA_SECTIONS_KEY, '*', 'sample'], 7)
     data.add_value([DATA_SECTIONS_KEY, '*', 'sample'], {'new'})
 
     data.add_value([DATA_TEMPLATE_KEY, 'sample'], {'new'})

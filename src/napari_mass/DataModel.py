@@ -82,17 +82,9 @@ class DataModel:
         self.matches = FileDict()
         self.transforms = FileDict()
 
-        self.order = []
-        self.order_confidences = []
-        self.stage_order = []
-        self.landmarks = {}
         self.magsections_initialised = False
         self.magnet_template_initialised = False
         self.sample_template_initialised = False
-        self.magsections_finalised = False
-        self.order_finalised = False
-        self.sample_sections_finalised = False
-        self.landmarks_finalised = False
 
         self.colors = create_color_table(1000)
 
@@ -111,20 +103,18 @@ class DataModel:
         self.outfolder = validate_out_folder(base_folder, get_dict(output_params, 'folder'))
 
         data_filename = join_path(self.outfolder, get_dict(output_params, 'datafile'))
-        self.data = DataFile(data_filename, load=False)
+        self.data = DataFile(data_filename)
 
         matching_filename = join_path(self.outfolder, 'matching.json')
-        self.matches = FileDict(matching_filename, load=False)
+        self.matches = FileDict(matching_filename)
 
         transforms_filename = join_path(self.outfolder, 'transforms.json')
-        self.transforms = FileDict(transforms_filename, load=False)
+        self.transforms = FileDict(transforms_filename)
 
         self.init_done = True
 
     def init_layers(self):
         logging.info('Initialising layers')
-
-        self.load_data()
 
         self.layers = []
         self.layers.extend(self.init_image_layers())
@@ -248,20 +238,24 @@ class DataModel:
             windows.append(window)
         return windows
 
-    def init_data_layers(self, top_path=DATA_SECTIONS_KEY + '/*'):
+    def init_data_layers(self, top_path=[DATA_SECTIONS_KEY, '*']):
         data_layers = {}
         input_params = self.params['input']
         for layer_name in deserialise(get_dict(input_params, 'layers', '')):
-            path = top_path + '/' + layer_name
-            if layer_name == 'rois':
-                path += '/*'
-            values0 = self.data.get_values(path)
-            value_type = self.data.get_value_type(layer_name)
-            values = [np.flip(value[value_type]) for value in values0]
-            data_layers[layer_name] = self.init_data_layer(layer_name, values, value_type)
+            data_layers[layer_name] = self.init_data_layer(layer_name, top_path)
         return data_layers
 
-    def init_data_layer(self, layer_name, values, value_type):
+    def init_data_layer(self, layer_name, top_path=[DATA_SECTIONS_KEY, '*']):
+        if layer_name == 'landmarks' and DATA_TEMPLATE_KEY not in top_path:
+            path = [layer_name, '*', DATA_SOURCE_KEY]
+        else:
+            path = top_path + [layer_name]
+            if layer_name == 'rois':
+                path += ['*']
+        values0 = self.data.get_values(path)
+        value_type = self.data.get_value_type(layer_name)
+        values = [np.flip(value[value_type]) for value in values0]
+
         if value_type == 'polygon':
             layer_type = 'shapes'
         else:
@@ -277,38 +271,48 @@ class DataModel:
         data_layer = values, metadata, layer_type
         return data_layer
 
-    def section_data_changed(self, name, action, indices, values):
+    def section_data_changed(self, action, name, indices, values):
         if name == 'landmarks':
-            top_level = name
-            name = DATA_SOURCE_KEY
+            path = [name, '*', DATA_SOURCE_KEY]
         else:
-            top_level = DATA_SECTIONS_KEY + '/*'
-        self.data_changed(name, action, indices, values, top_level)
+            path = [DATA_SECTIONS_KEY, '*', name]
+        return self.data_changed(action, path, indices, values)
 
-    def template_data_changed(self, name, action, indices, values):
-        self.data_changed(name, action, indices, values, DATA_TEMPLATE_KEY)
+    def template_data_changed(self, action, name, indices, values):
+        path = [DATA_TEMPLATE_KEY, name]
+        return self.data_changed(action, path, indices, values)
 
-    def data_changed(self, name, action, indices, values, top_level):
+    def data_changed(self, action, path, indices, values):
+        data_order_changed = False
         modified = False
-        path = top_level + '/' + name
-        if name == 'rois':
-            path += '/*'
-        value_type = self.data.get_value_type(name)
+        value_type = None
+
+        if path[-1] == 'rois':
+            path += ['*']
+
+        for key in path:
+            value_type = self.data.get_value_type(key)
+            if value_type is not None:
+                break
+
         for index in indices:
             if action == ActionType.ADDED or action == ActionType.CHANGED:
                 value = np.flip(values[index])
                 if value_type == 'polygon':
-                    value = Section(value).to_dict()
+                    value = Section(value)
                 elif value_type == 'location':
-                    value = Point(value).to_dict()
+                    value = Point(value)
                 if action == ActionType.ADDED:
                     modified = self.data.add_value(path, value)
                 elif action == ActionType.CHANGED:
                     modified = self.data.set_value(path, index, value)
             elif action == ActionType.REMOVED:
                 modified = self.data.remove_value(path, index)
+                if modified:
+                    data_order_changed = True
         if modified:
             self.data.save()
+        return data_order_changed
 
     def update_section_order(self, new_order):
         new_data = {}
@@ -367,18 +371,19 @@ class DataModel:
 
     def propagate_rois(self):
         for section in self.data[DATA_SECTIONS_KEY].values():
-            section['rois'] = {}
-            sample = section['sample']
-            for roi_index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
-                # transform corners of template section (relative from magnet center), using transform of each section
-                h = create_transform(angle=sample['angle'], translate=sample['center'])
-                new_section_points = apply_transform(section_points, h)
-                new_section_center = apply_transform([section_center], h)[0]
-                section['rois'][roi_index] = {
-                    'polygon': new_section_points.tolist(),
-                    'center': new_section_center.tolist(),
-                    'angle': sample['angle'],
-                    'confidence': 1}
+            sample = section.get('sample')
+            if sample:
+                section['rois'] = {}
+                for roi_index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
+                    # transform corners of template section (relative from magnet center), using transform of each section
+                    h = create_transform(angle=sample['angle'], translate=sample['center'])
+                    new_section_points = apply_transform(section_points, h)
+                    new_section_center = apply_transform([section_center], h)[0]
+                    section['rois'][roi_index] = {
+                        'polygon': new_section_points.tolist(),
+                        'center': new_section_center.tolist(),
+                        'angle': sample['angle'],
+                        'confidence': 1}
         self.data.save()
 
     def get_output_scale(self):
@@ -689,7 +694,7 @@ class DataModel:
 
     def load_data(self):
         self.data.load()
-        #self.sections = self.load_objects(self.data.get_section(DATA_SECTIONS_KEY))
+        self.sections = self.load_objects(self.data.get_section(DATA_SECTIONS_KEY))
         self.matches.load()
         self.transforms.load()
         self.order = self.data.get_section('serial_order').get('order', [])

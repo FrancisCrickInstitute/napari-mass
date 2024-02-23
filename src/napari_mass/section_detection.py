@@ -66,7 +66,8 @@ def detect_magsections(contour_detection_image, params, pixel_size_um=None, outf
         nsections = int(round(area / mean_area))
         if nsections == 1:
             contour1 = contour - np.min(contour, 0)
-            center, size, angle = get_rotated_rect(contour1)
+            #center, size, angle = get_rotated_rect(contour1)
+            center, size, angle = get_shape_stats(contour1)
             image0 = get_contour_mask(contour1, shape=np.flip(np.max(contour1, 0)).astype(int))
             image = rotate_image(image0, angle, center)
             images.append(image)

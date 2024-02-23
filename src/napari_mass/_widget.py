@@ -88,14 +88,9 @@ class MassWidget(QSplitter):
     def init_layers(self):
         self.main_viewer.layers.clear()
         layer_infos = self.model.init_layers()
-        self.layer_names = []
         if layer_infos:
             for layer_info in layer_infos:
                 name_info = layer_info[1]['name']
-                if isinstance(name_info, list):
-                    self.layer_names.extend(name_info)
-                else:
-                    self.layer_names.append(name_info)
             self.main_viewer.layers.selection.clear()
             self.main_viewer.layers.selection.events.changed.connect(self.on_layer_selection_changed)
             self.main_viewer.layers.events.inserted.connect(self.on_layer_added)
@@ -233,7 +228,7 @@ class MassWidget(QSplitter):
             if 'edit' in template and not template['edit']:
                 var_widget.setReadOnly(True)
 
-        layout.setContentsMargins(0, 0, 0, 0)  # Tighten up margins
+        #layout.setContentsMargins(0, 0, 0, 0)  # Tighten up margins
         widget.setLayout(layout)
         return widget
 
@@ -254,11 +249,8 @@ class MassWidget(QSplitter):
 
     def select_layer(self, name):
         if self.main_viewer.layers:
-            if name in self.layer_names:
-                index = self.layer_names.index(name)
-            else:
-                index = 0
-            self.main_viewer.layers.selection.active = self.main_viewer.layers[index]
+            if name in self.main_viewer.layers:
+                self.main_viewer.layers.selection.active = self.main_viewer.layers[name]
 
     def select_template_layer(self, name):
         if self.template_viewer.layers:
@@ -332,12 +324,18 @@ class MassWidget(QSplitter):
                     layer.mode = mode
 
     def on_layer_data_changed(self, event):
-        #print(event.source.name, event.action, event.data_indices, event.value)
-        self.model.section_data_changed(event.source.name, event.action, event.data_indices, event.value)
+        layer_name = event.source.name
+        #print(event.action, layer_name, event.data_indices, event.value)
+        refesh_data = self.model.section_data_changed(event.action, layer_name, event.data_indices, event.value)
+        if refesh_data:
+            layer_info = self.model.init_data_layer(layer_name)
+            self.main_viewer.layers.remove(layer_name)
+            self.main_viewer.add_layer(Layer.create(*layer_info))
 
     def on_template_data_changed(self, event):
-        #print(event.source.name, event.action, event.data_indices, event.value)
-        self.model.template_data_changed(event.source.name, event.action, event.data_indices, event.value)
+        layer_name = event.source.name
+        #print(event.action, layer_name, event.data_indices, event.value)
+        refesh_data = self.model.template_data_changed(event.action, layer_name, event.data_indices, event.value)
 
     def save_params(self):
         if self.project_set:
@@ -414,7 +412,7 @@ class MassWidget(QSplitter):
     def update_data_layers(self):
         data_layers = self.model.init_data_layers()
         for layer_name, layer_info in data_layers.items():
-            if layer_name in self.layer_names:
+            if layer_name in self.main_viewer.layers:
                 self.main_viewer.layers.remove(layer_name)
             self.main_viewer.add_layer(Layer.create(*layer_info))
 
@@ -426,9 +424,8 @@ class MassWidget(QSplitter):
 
     def copy_sample(self):
         shape_copy_layer = 'sample'
-        if shape_copy_layer in self.layer_names:
-            layer_index = self.layer_names.index(shape_copy_layer)
-            layer = self.main_viewer.layers[layer_index]
+        if shape_copy_layer in self.main_viewer.layers:
+            layer = self.main_viewer.layers[shape_copy_layer]
             selection = list(layer.selected_data)
             if len(selection) > 0:
                 self.copied_shape = layer.data[selection[0]]
@@ -445,7 +442,7 @@ class MassWidget(QSplitter):
                 self.template_viewer.add_image(image_stack, scale=layer_scale)
                 self.template_viewer.dims.set_point(0, 0)  # set index to 0
                 self.model.init_sample_template()
-                layer_infos = self.model.init_data_layers(DATA_TEMPLATE_KEY)
+                layer_infos = self.model.init_data_layers([DATA_TEMPLATE_KEY])
                 if layer_infos:
                     for layer_info in layer_infos.values():
                         layer = self.template_viewer.add_layer(Layer.create(*layer_info))
