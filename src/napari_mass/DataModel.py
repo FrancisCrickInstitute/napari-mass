@@ -250,7 +250,7 @@ class DataModel:
             path = [layer_name, '*', DATA_SOURCE_KEY]
         else:
             path = top_path + [layer_name]
-            if layer_name == 'rois':
+            if layer_name in ['rois', 'focus']:
                 path += ['*']
         values0 = self.data.get_values(path)
         value_type = self.data.get_value_type(layer_name)
@@ -287,7 +287,7 @@ class DataModel:
         modified = False
         value_type = None
 
-        if path[-1] == 'rois':
+        if path[-1] in ['rois', 'focus']:
             path += ['*']
 
         for key in path:
@@ -334,32 +334,40 @@ class DataModel:
         return images
 
     def init_sample_template(self):
-        sample = self.data.get_values(DATA_TEMPLATE_KEY + '/sample')
+        sample = self.data.get_values([DATA_TEMPLATE_KEY, 'sample'])
         if not sample:
-            values = self.data.get_values(DATA_SECTIONS_KEY + '/*/sample')
+            values = self.data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
             sections = [Section(value) for value in values]
             element_size, large_size0 = get_section_sizes(sections)
             padded_size_factor = 1
             large_size = np.multiply(large_size0, padded_size_factor)
             centre, size, rotation = (np.divide(large_size, 2), element_size.astype(float), 0)
             sample = Section(cv.boxPoints((centre, size, rotation)))
-            self.data.add_value(DATA_TEMPLATE_KEY + '/sample', sample)
+            self.data.add_value([DATA_TEMPLATE_KEY, 'sample'], sample)
             self.data.save()
 
-    def extract_rois(self):
-        sample = self.data.get_values(DATA_TEMPLATE_KEY + '/sample')[0]
-        rois = self.data.get_values(DATA_TEMPLATE_KEY + '/rois/*')
-        if len(rois) > 0:
+    def get_template_elements(self, element_name, ref_element_name='sample'):
+        ref_element = self.data.get_values([DATA_TEMPLATE_KEY, ref_element_name])[0]
+        elements = self.data.get_values([DATA_TEMPLATE_KEY, element_name, '*'])
+        value_type = self.data.get_value_type(element_name)
+        if len(elements) > 0:
             section_points = []
             section_centers = []
-            for roi in rois:
-                new_center = np.array(roi['center']) - sample['center']
-                new_polygon = np.array(roi['polygon']) - sample['center']
+            ref_center = ref_element['center']
+            for element in elements:
+                data = element[value_type]
+                if value_type == 'polygon':
+                    center = element['center']
+                else:
+                    center = data
+                    data = [data]
+                new_points = np.array(data) - ref_center
+                new_center = np.array(center) - ref_center
                 angle = 0
                 if new_center[1] > new_center[1]:
                     angle = norm_angle(angle + 180)
                 h = create_transform(angle=angle)
-                section_points.append(apply_transform(new_polygon, h))
+                section_points.append(apply_transform(new_points, h))
                 section_centers.append(apply_transform([new_center], h)[0])
             self.template_section_points = section_points
             self.template_section_centers = section_centers
@@ -369,21 +377,28 @@ class DataModel:
             self.template_section_centers = []
             return False
 
-    def propagate_rois(self):
+    def propagate_elements(self, element_name, ref_element_name='sample'):
+        value_type = self.data.get_value_type(element_name)
         for section in self.data[DATA_SECTIONS_KEY].values():
-            sample = section.get('sample')
-            if sample:
-                section['rois'] = {}
-                for roi_index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
+            ref_element = section.get(ref_element_name)
+            if ref_element:
+                section[element_name] = {}
+                for index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
                     # transform corners of template section (relative from magnet center), using transform of each section
-                    h = create_transform(angle=sample['angle'], translate=sample['center'])
+                    h = create_transform(angle=ref_element['angle'], translate=ref_element['center'])
                     new_section_points = apply_transform(section_points, h)
-                    new_section_center = apply_transform([section_center], h)[0]
-                    section['rois'][roi_index] = {
-                        'polygon': new_section_points.tolist(),
-                        'center': new_section_center.tolist(),
-                        'angle': sample['angle'],
-                        'confidence': 1}
+                    if value_type == 'polygon':
+                        new_section_center = apply_transform([section_center], h)[0]
+                        value = {
+                            'polygon': new_section_points.tolist(),
+                            'center': new_section_center.tolist(),
+                            'angle': ref_element['angle'],
+                            'confidence': 1}
+                    else:
+                        value = {
+                            'location': new_section_points.tolist(),
+                            'confidence': 1}
+                    section[element_name][index] = value
         self.data.save()
 
     def get_output_scale(self):

@@ -6,7 +6,11 @@ def modify_datafile(filename):
     data = DataFile(filename)
     samples = data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
     rois = data.get_values([DATA_SECTIONS_KEY, '*', 'rois', '*'])
+    focus = data.get_values([DATA_SECTIONS_KEY, '*', 'focus', '*'])
     order = data.get_values('serial_order/order')
+
+    template_rois = data.get_values([DATA_TEMPLATE_KEY, 'rois', '*'])
+    template_focus = data.get_values([DATA_TEMPLATE_KEY, 'focus', '*'])
 
     data.set_value([DATA_SECTIONS_KEY, '*', 'sample'], 5, {'test'})
     data.set_value([DATA_SECTIONS_KEY, '*', 'rois', '*'], 5, {'test'})

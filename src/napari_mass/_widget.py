@@ -456,9 +456,13 @@ class MassWidget(QSplitter):
 
     def on_propagate_template_clicked(self):
         # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
-        if self.model.extract_rois():
-            self.model.propagate_rois()
-            self.update_data_layers()
+        layer_name = self.main_viewer.layers.selection.active.name
+        if layer_name in ['rois', 'focus']:
+            if self.model.get_template_elements(layer_name):
+                self.model.propagate_elements(layer_name)
+                self.update_data_layers()
+        else:
+            QMessageBox.warning(self, 'MASS', 'Invalid layer selected')
 
 
 widget: MassWidget
