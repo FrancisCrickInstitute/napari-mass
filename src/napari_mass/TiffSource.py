@@ -17,10 +17,6 @@ class TiffSource(OmeSource):
 
     filename: str
     """original filename"""
-    loaded: bool
-    """if image data is loaded"""
-    decompressed: bool
-    """if image data is decompressed"""
     pages: list
     """list of all relevant TiffPages"""
     data: bytes
@@ -35,8 +31,6 @@ class TiffSource(OmeSource):
                  source_info_required: bool = False):
 
         super().__init__()
-        self.loaded = False
-        self.decompressed = False
         self.data = bytes()
         self.arrays = []
 
@@ -173,46 +167,19 @@ class TiffSource(OmeSource):
         self.position = position
 
     def get_source_dask(self):
-        return [da.from_zarr(self.tiff.aszarr(level=level)) for level in range(len(self.sizes))]
+        return self._load_as_dask()
 
-    def load(self, decompress: bool = False):
-        self.fh.seek(0)
-        self.data = self.fh.read()
-        self.loaded = True
-        if decompress:
-            self.decompress()
-
-    def unload(self):
-        self.loaded = False
-        del self.data
-        self.clear_decompress()
-
-    def decompress(self):
-        self.clear_decompress()
-        for page in self.pages:
-            if isinstance(page, list):
-                array = []
-                for page1 in page:
-                    array.append(page1.asarray())
-                array = np.asarray(array)
-            else:
-                array = page.asarray()
-            self.arrays.append(array)
-        self.decompressed = True
-
-    def clear_decompress(self):
-        self.decompressed = False
-        for array in self.arrays:
-            del array
-        self.arrays = []
+    def _load_as_dask(self):
+        if len(self.arrays) == 0:
+            for level in range(len(self.sizes)):
+                data = da.from_zarr(self.tiff.aszarr(level=level))
+                if data.chunksize == data.shape:
+                    data = data.rechunk()
+                self.arrays.append(data)
+        return self.arrays
 
     def _asarray_level(self, level: int, **slicing) -> np.ndarray:
-        if self.decompressed:
-            data = self.arrays[level]
-        else:
-            data = da.from_zarr(self.tiff.aszarr(level=level))
-            if data.chunksize == data.shape:
-                data = data.rechunk()
+        self._load_as_dask()
         slices = get_numpy_slicing(self.dimension_order, **slicing)
-        out = redimension_data(data[slices], self.dimension_order, self.get_dimension_order())
+        out = redimension_data(self.arrays[level][slices], self.dimension_order, self.get_dimension_order())
         return out

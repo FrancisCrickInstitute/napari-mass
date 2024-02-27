@@ -23,10 +23,8 @@ import cv2 as cv
 import glob
 import logging
 from napari.layers.base import ActionType
-from napari_ome_zarr._reader import transform
+from napari_ome_zarr._reader import transform, napari_get_reader
 import numpy as np
-from ome_zarr.io import parse_url
-from ome_zarr.reader import Reader
 import os.path
 from sklearn.metrics import euclidean_distances
 from tifffile import xml2dict
@@ -175,11 +173,10 @@ class DataModel:
         # set image layers
         if source:
             if isinstance(source, OmeZarrSource):
-                reader = Reader(parse_url(join_path(base_folder, input_filename)))
-                image_layers = transform(reader())()
+                image_layers = napari_get_reader(join_path(base_folder, input_filename))()
             else:
-                source_pixel_size = source.get_pixel_size_micrometer()[:2]
                 data = source.get_source_dask()
+                source_pixel_size = source.get_pixel_size_micrometer()[:2]
                 channels = source.get_channels()
                 nchannels = len(channels)
                 channel_names = []
@@ -364,7 +361,7 @@ class DataModel:
                 new_points = np.array(data) - ref_center
                 new_center = np.array(center) - ref_center
                 angle = 0
-                if new_center[1] > new_center[1]:
+                if new_center[1] > ref_center[1]:
                     angle = norm_angle(angle + 180)
                 h = create_transform(angle=angle)
                 section_points.append(apply_transform(new_points, h))
@@ -384,20 +381,20 @@ class DataModel:
             if ref_element:
                 section[element_name] = {}
                 for index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
-                    # transform corners of template section (relative from magnet center), using transform of each section
+                    # transform corners of template section (relative from center), using transform of each section
                     h = create_transform(angle=ref_element['angle'], translate=ref_element['center'])
-                    new_section_points = apply_transform(section_points, h)
+                    new_section_center = apply_transform([section_center], h)[0]
                     if value_type == 'polygon':
-                        new_section_center = apply_transform([section_center], h)[0]
+                        new_section_points = apply_transform(section_points, h)
                         value = {
                             'polygon': new_section_points.tolist(),
                             'center': new_section_center.tolist(),
-                            'angle': ref_element['angle'],
-                            'confidence': 1}
+                            'angle': ref_element['angle']
+                        }
                     else:
                         value = {
-                            'location': new_section_points.tolist(),
-                            'confidence': 1}
+                            'location': new_section_center.tolist()
+                        }
                     section[element_name][index] = value
         self.data.save()
 
