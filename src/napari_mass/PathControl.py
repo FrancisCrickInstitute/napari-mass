@@ -1,7 +1,7 @@
 import os
 from PyQt5.QtWidgets import QPushButton, QFileDialog
 
-from napari_mass.util import get_dict
+from napari_mass.util import get_dict_value
 
 
 class PathControl:
@@ -22,7 +22,7 @@ class PathControl:
 
     def show_dialog(self):
         value = self.path_widget.text()
-        value0 = get_dict(self.params, self.param_label)
+        value0 = get_dict_value(self.params, self.param_label)
         if not value and value0:
             value = value0
         types = self.path_type.split('.')[1:]

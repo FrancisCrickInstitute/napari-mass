@@ -421,12 +421,21 @@ def get_dict_permissive(dct, name):
     return None
 
 
-def get_dict(dct, label, default=None):
+def get_dict_value(dct, label, default=None, separator='.'):
     value = dct
-    for sublabel in label.split('.'):
+    for sublabel in label.split(separator):
         value = value.get(sublabel)
     if isinstance(value, dict):
         value = value.get('value')
+    if value is None:
+        value = default
+    return value
+
+
+def get_dict_path(dct, path, default=None, separator='/'):
+    value = dct
+    for sublabel in path.split(separator):
+        value = value.get(sublabel)
     if value is None:
         value = default
     return value
@@ -594,7 +603,7 @@ def split_value_unit_list(text):
 def get_value_units_micrometer(value_units0: list) -> list:
     conversions = {'nm': 1e-3, 'µm': 1, 'um': 1, 'micrometer': 1, 'mm': 1e3, 'cm': 1e4, 'm': 1e6}
     if value_units0 is None:
-        return None
+        return []
 
     values_um = []
     for value_unit in value_units0:

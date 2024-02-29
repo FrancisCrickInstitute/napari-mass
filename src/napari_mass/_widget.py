@@ -244,7 +244,7 @@ class MassWidget(QSplitter):
     def check_enabled_layers(self):
         for index, name in enumerate(self.tab_names):
             if index > 1:
-                enabled = (name in get_dict(self.params, 'input.layers'))
+                enabled = (name in get_dict_value(self.params, 'input.layers'))
                 self.params_widget.setTabEnabled(index, enabled)
 
     def select_layer(self, name):
@@ -259,7 +259,7 @@ class MassWidget(QSplitter):
                     self.template_viewer.layers.selection.active = layer
 
     def on_layer_added(self, event):
-        data_layer_names = get_dict(self.params, 'input.layers')
+        data_layer_names = get_dict_value(self.params, 'input.layers')
         layer = event.value
         if layer.name in data_layer_names:
             layer.events.data.connect(self.on_layer_data_changed)
@@ -336,10 +336,14 @@ class MassWidget(QSplitter):
         layer_name = event.source.name
         #print(event.action, layer_name, event.data_indices, event.value)
         refesh_data = self.model.template_data_changed(event.action, layer_name, event.data_indices, event.value)
+        if refesh_data:
+            layer_info = self.model.init_data_layer(layer_name, top_path=[DATA_TEMPLATE_KEY])
+            self.template_viewer.layers.remove(layer_name)
+            self.template_viewer.add_layer(Layer.create(*layer_info))
 
     def save_params(self):
         if self.project_set:
-            path = get_dict(self.params, 'project.filename')
+            path = get_dict_value(self.params, 'project.filename')
             with open(path, 'w') as outfile:
                 yaml.dump(self.params, outfile, default_flow_style=None, sort_keys=False)
 

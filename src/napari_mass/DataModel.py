@@ -96,11 +96,11 @@ class DataModel:
         params = self.params
         output_params = params['project']['output']
 
-        base_folder = os.path.dirname(get_dict(params, 'project.filename'))
+        base_folder = os.path.dirname(get_dict_value(params, 'project.filename'))
 
-        self.outfolder = validate_out_folder(base_folder, get_dict(output_params, 'folder'))
+        self.outfolder = validate_out_folder(base_folder, get_dict_value(output_params, 'folder'))
 
-        data_filename = join_path(self.outfolder, get_dict(output_params, 'datafile'))
+        data_filename = join_path(self.outfolder, get_dict_value(output_params, 'datafile'))
         self.data = DataFile(data_filename)
 
         matching_filename = join_path(self.outfolder, 'matching.json')
@@ -126,17 +126,17 @@ class DataModel:
         input_params = params['input']
         output_params = params['project']['output']
 
-        project_filename = get_dict(params, 'project.filename')
+        project_filename = get_dict_value(params, 'project.filename')
         if project_filename:
             base_folder = os.path.dirname(project_filename)
         else:
             base_folder = None
 
         self.output_pixel_size = get_value_units_micrometer(split_value_unit_list(
-                                    get_dict(output_params, 'pixel_size', '2um')))
+                                    get_dict_value(output_params, 'pixel_size', '2um')))
 
         # main image
-        input_filename = get_dict(input_params, 'source.filename')
+        input_filename = get_dict_value(input_params, 'source.filename')
         if input_filename is None or input_filename == '':
             logging.warning('Source not set')
             return []
@@ -149,17 +149,17 @@ class DataModel:
 
         # hq fluor image
         hq_params = input_params.get('fluor_hq')
-        filename = get_dict(hq_params, 'filename')
+        filename = get_dict_value(hq_params, 'filename')
         if filename:
             tile_path = join_path(base_folder, filename)
-            channel = get_dict(hq_params, 'channel', '')
+            channel = get_dict_value(hq_params, 'channel', '')
             tile_filenames = glob.glob(tile_path)
-            flatfield_filename = join_path(base_folder, get_dict(hq_params, 'flatfield_filename'))
+            flatfield_filename = join_path(base_folder, get_dict_value(hq_params, 'flatfield_filename'))
             stitching_filename = join_path(self.outfolder, 'stitching.json')
-            composition_metadata_xml = open(join_path(base_folder, get_dict(hq_params, 'metadata')), encoding='utf8').read()
+            composition_metadata_xml = open(join_path(base_folder, get_dict_value(hq_params, 'metadata')), encoding='utf8').read()
             composition_metadata = xml2dict(composition_metadata_xml)['ExportDocument']['Image']
             self.fluor_hq_source = TiffTileSource(tile_filenames, composition_metadata,
-                                                  max_stitch_offset_um=get_dict(hq_params, 'max_stitch_offset_um'),
+                                                  max_stitch_offset_um=get_dict_value(hq_params, 'max_stitch_offset_um'),
                                                   stitching_filename=stitching_filename,
                                                   channel=channel,
                                                   flatfield_filename=flatfield_filename)
@@ -238,7 +238,7 @@ class DataModel:
     def init_data_layers(self, top_path=[DATA_SECTIONS_KEY, '*']):
         data_layers = {}
         input_params = self.params['input']
-        for layer_name in deserialise(get_dict(input_params, 'layers', '')):
+        for layer_name in deserialise(get_dict_value(input_params, 'layers', '')):
             data_layers[layer_name] = self.init_data_layer(layer_name, top_path)
         return data_layers
 
@@ -465,7 +465,7 @@ class DataModel:
         logging.shutdown()
 
     def process_magnet_sections(self):
-        self.matching_methods = ensure_list(get_dict(self.params, 'matching.method', 'features'))
+        self.matching_methods = ensure_list(get_dict_value(self.params, 'matching.method', 'features'))
 
         confidences = []
         detection_params = self.params['mag_detection']

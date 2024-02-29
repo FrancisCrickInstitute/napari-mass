@@ -115,8 +115,21 @@ class DataFile(FileDict):
         return False
 
     def remove_value(self, keys, index):
-        old_value = self.set_value(keys, index, None)
-        return old_value is not None
+        if not isinstance(keys, list):
+            keys = deserialise(keys, '/')
+
+        changed = self.set_value(keys, index, None)
+
+        # check remove empty values
+        if changed and '*' in keys:
+            key_index = keys.index('*')
+            dct = get_dict_path(self, '/'.join(keys[:key_index]))
+            new_dct = {index: value for index, value in enumerate(dct.values()) if value != {}}
+            if new_dct != dct:
+                dct.clear()
+                for key, item in new_dct.items():
+                    dct[key] = new_dct[key]
+        return changed
 
     def exists(self, keys, dct=None):
         if dct is None:

@@ -24,6 +24,8 @@ def modify_datafile(filename):
 
     data.remove_value([DATA_TEMPLATE_KEY, 'rois', '*'], 0)
 
+    data.remove_value([DATA_SECTIONS_KEY, '*'], 2)
+
     pass
 
 
