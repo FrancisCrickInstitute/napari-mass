@@ -173,7 +173,9 @@ class DataModel:
         # set image layers
         if source:
             if isinstance(source, OmeZarrSource):
-                image_layers = napari_get_reader(join_path(base_folder, input_filename))()
+                path = join_path(base_folder, input_filename)
+                reader = napari_get_reader(path)
+                image_layers = reader(path)
             else:
                 data = source.get_source_dask()
                 source_pixel_size = source.get_pixel_size_micrometer()[:2]

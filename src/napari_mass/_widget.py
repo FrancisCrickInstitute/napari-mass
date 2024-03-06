@@ -89,8 +89,6 @@ class MassWidget(QSplitter):
         self.main_viewer.layers.clear()
         layer_infos = self.model.init_layers()
         if layer_infos:
-            for layer_info in layer_infos:
-                name_info = layer_info[1]['name']
             self.main_viewer.layers.selection.clear()
             self.main_viewer.layers.selection.events.changed.connect(self.on_layer_selection_changed)
             self.main_viewer.layers.events.inserted.connect(self.on_layer_added)
