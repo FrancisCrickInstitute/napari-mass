@@ -36,10 +36,12 @@ from napari_mass.file.FileDict import FileDict
 from napari_mass.file.csv_file import csv_write
 from napari_mass.file.DataFile import DataFile
 from napari_mass.ExternalTspSolver import ExternalTspSolver
-from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics
+from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics, \
+    align_sections_cpd
 from napari_mass.Point import Point
 from napari_mass.section_detection import create_detection_image, detect_magsections, detect_nearest_edges
-from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
+from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images, \
+    get_image_features
 from napari_mass.TiffTileSource import TiffTileSource
 from napari_mass.OmeZarrSource import OmeZarrSource
 from napari_mass.parameters import *
@@ -85,6 +87,8 @@ class DataModel:
         self.sample_template_initialised = False
 
         self.colors = create_color_table(1000)
+        self.sections = []
+        self.section_images = []
 
     def set_params(self, params):
         self.params = params
@@ -270,6 +274,12 @@ class DataModel:
         data_layer = values, metadata, layer_type
         return data_layer
 
+    def get_output_scale(self):
+        pixel_size = list(self.output_pixel_size)
+        if len(pixel_size) < 2:
+            pixel_size = pixel_size * 2
+        return pixel_size[:2]
+
     def section_data_changed(self, action, name, indices, values):
         if name == 'landmarks':
             path = [name, '*', DATA_SOURCE_KEY]
@@ -321,16 +331,17 @@ class DataModel:
         self.data.save()
 
     def get_section_images(self, section_name):
-        images = []
+        self.section_images = []
+        self.sections = []
         values = self.data.get_values(DATA_SECTIONS_KEY + '/*/' + section_name)
         value_type = self.data.get_value_type(section_name)
         if value_type == 'polygon':
             order = self.data.get_values('serial_order/order')
             if not order:
                 order = range(len(values))
-            sections = [Section(values[index]) for index in order]
-            images = get_section_images(sections, self.source, pixel_size=self.output_pixel_size)
-        return images
+            self.sections = [Section(values[index]) for index in order]
+            self.section_images = get_section_images(self.sections, self.source, pixel_size=self.output_pixel_size)
+        return self.section_images
 
     def init_sample_template(self):
         sample = self.data.get_values([DATA_TEMPLATE_KEY, 'sample'])
@@ -376,6 +387,32 @@ class DataModel:
             self.template_section_centers = []
             return False
 
+    def align_sections(self, layer_name, method='cpd', reorder=True):
+        features = {}
+        detection_params = self.params.get(layer_name)
+        order = self.data.get_values('serial_order/order')
+        n = len(order)
+
+        #for index, image in zip(order, self.section_images):
+        #    points, size_points, keypoints, descriptors = \
+        #        get_image_features(image, brightfield_detection_image)
+        #    features[index] = {
+        #        'points': points,
+        #        'size_points': size_points,
+        #        'keypoints': keypoints,
+        #        'descriptors': descriptors
+        #    }
+        for section in self.sections:
+            section.init_features(self.source, brightfield_detection_image, detection_params)
+        if reorder:
+            pairs = np.transpose(np.triu_indices(n, 1))
+        else:
+            pairs = [[order[index], order[index + 1]] for index in range(len(order) - 1)]
+        for index1, index2 in pairs:
+            #transform, metrics = align_sections_cpd(features[index1], features[index2])
+            transform, metrics = align_sections_cpd(self.sections[index1], self.sections[index2])
+            print(index1, index2, metrics['match_rate'])
+
     def propagate_elements(self, element_name, ref_element_name='sample'):
         value_type = self.data.get_value_type(element_name)
         for section in self.data[DATA_SECTIONS_KEY].values():
@@ -399,12 +436,6 @@ class DataModel:
                         }
                     section[element_name][index] = value
         self.data.save()
-
-    def get_output_scale(self):
-        pixel_size = list(self.output_pixel_size)
-        if len(pixel_size) < 2:
-            pixel_size = pixel_size * 2
-        return pixel_size[:2]
 
 
 

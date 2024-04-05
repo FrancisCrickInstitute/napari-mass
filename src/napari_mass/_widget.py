@@ -94,8 +94,7 @@ class MassWidget(QSplitter):
             self.main_viewer.layers.events.inserted.connect(self.on_layer_added)
         self.enable_tabs()
         self.check_enabled_layers()
-        self.populate_template_button.setEnabled(True)
-        self.propagate_template_button.setEnabled(True)
+        self.enable_template_controls('populate')
         return layer_infos
 
     def clear_controls(self):
@@ -117,13 +116,15 @@ class MassWidget(QSplitter):
         viewer_widget = QtViewerModelWrap(self.main_viewer, viewer)
         layout.addWidget(viewer_widget, 0, 0, 1, -1)
         self.populate_template_button = QPushButton('Populate')
-        self.populate_template_button.setEnabled(False)
         self.populate_template_button.clicked.connect(self.on_populate_template_clicked)
+        self.align_template_button = QPushButton('Align')
+        self.align_template_button.clicked.connect(self.on_align_template_clicked)
         self.propagate_template_button = QPushButton('Propagate')
-        self.propagate_template_button.setEnabled(False)
         self.propagate_template_button.clicked.connect(self.on_propagate_template_clicked)
+        self.enable_template_controls('none')
         layout.addWidget(self.populate_template_button, 1, 0)
-        layout.addWidget(self.propagate_template_button, 1, 1)
+        layout.addWidget(self.align_template_button, 1, 1)
+        layout.addWidget(self.propagate_template_button, 1, 2)
         widget.setLayout(layout)
         return widget
 
@@ -234,6 +235,18 @@ class MassWidget(QSplitter):
         for index in range(self.params_widget.count()):
             if (set and (tab_index < 0 or index <= tab_index)) or (not set and index >= tab_index):
                 self.params_widget.setTabEnabled(index, set)
+
+    def enable_template_controls(self, controls='all'):
+        if controls and 'populate' in controls:
+            self.populate_template_button.setEnabled(True)
+        if controls and 'all' in controls:
+            self.populate_template_button.setEnabled(True)
+            self.align_template_button.setEnabled(True)
+            self.propagate_template_button.setEnabled(True)
+        elif not controls or controls == 'none':
+            self.populate_template_button.setEnabled(False)
+            self.align_template_button.setEnabled(False)
+            self.propagate_template_button.setEnabled(False)
 
     def select_tab(self, index):
         self.tab_index = index  # prevent event loop
@@ -435,9 +448,10 @@ class MassWidget(QSplitter):
                 self.shape_copy_layer = shape_copy_layer
 
     def on_populate_template_clicked(self):
+        valid_layers = ['magnet', 'sample']
         self.template_viewer.layers.clear()
         layer_name = self.main_viewer.layers.selection.active.name
-        if layer_name in ['magnet', 'sample']:
+        if layer_name in valid_layers:
             image_stack = np.array(self.model.get_section_images(layer_name))
             layer_scale = self.model.get_output_scale()
             if len(image_stack) > 0:
@@ -451,20 +465,31 @@ class MassWidget(QSplitter):
                         layer.events.data.connect(self.on_template_data_changed)
                     main_layer = self.main_viewer.layers.selection.active
                     self.select_template_layer(main_layer.name)
+                    self.enable_template_controls('all')
             else:
                 QMessageBox.warning(self, 'MASS', 'No layer data to populate')
         else:
-            QMessageBox.warning(self, 'MASS', 'Invalid layer selected')
+            QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')
+
+    def on_align_template_clicked(self):
+        valid_layers = ['magnet', 'sample']
+        layer_name = self.main_viewer.layers.selection.active.name
+        if layer_name in valid_layers:
+            self.model.align_sections(layer_name, reorder=False)
+            self.on_populate_template_clicked()
+            self.update_data_layers()
+        else:
+            QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')
 
     def on_propagate_template_clicked(self):
-        # TODO: get drawn shape from current layer and propagate to corresponding layer -> self.model.data
+        valid_layers = ['rois', 'focus']
         layer_name = self.main_viewer.layers.selection.active.name
-        if layer_name in ['rois', 'focus']:
+        if layer_name in valid_layers:
             if self.model.get_template_elements(layer_name):
                 self.model.propagate_elements(layer_name)
                 self.update_data_layers()
         else:
-            QMessageBox.warning(self, 'MASS', 'Invalid layer selected')
+            QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')
 
 
-widget: MassWidget
+widget: MassWidget  # singleton; create once globally

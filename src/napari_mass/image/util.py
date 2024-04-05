@@ -322,7 +322,7 @@ def norm_image_minmax(image0):
         image, alpha = image0[..., :3], image0[..., 3]
     else:
         image, alpha = image0, None
-    normimage = cv.normalize(image, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F)
+    normimage = cv.normalize(np.array(image), None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F)
     if alpha is not None:
         normimage = np.dstack([normimage, alpha])
     return normimage
@@ -429,6 +429,29 @@ def blur_image(image, sigma):
     else:
         new_image = blur_image_single(image, sigma)
     return new_image
+
+
+def fluor_detection_image(image):
+    alpha = image[..., 3]
+    values = image[np.where(alpha)]
+    image = grayscale_image(image[..., :3])
+    level = np.quantile(values, 0.99) if len(values) > 0 else 0.5
+    detection_image = float2int_image(image >= level)
+    return detection_image
+
+
+def brightfield_detection_image(image):
+    alpha = image[..., 3]
+    values = image[np.where(alpha)]
+    image = grayscale_image(image[..., :3])
+    if np.median(values) > 0.25:
+        # light background
+        image2 = 1 - image
+    else:
+        image2 = image
+    image2[np.where(1 - alpha)] = 0
+    _, detection_image = cv.threshold(float2int_image(image2), 0, 255, cv.THRESH_OTSU)
+    return detection_image
 
 
 def detect_edges(image):
@@ -770,7 +793,7 @@ def get_contour_mask(contour, image=None, shape=None, dtype=np.float32, color=No
 
 def get_contour_points(binimage, min_area=1, max_area=None):
     contours = get_contours(binimage)
-    area_contours = [(contour, cv.contourArea(contour)) for contour in contours]
+    area_contours = [(contour, cv.contourArea(contour)) for contour in contours[1:]]
     area_contours.sort(key=lambda contour_area: contour_area[1], reverse=True)
     area_points = [(get_center(contour), area) for contour, area in area_contours
                    if area >= min_area and (max_area is None or area <= max_area)]

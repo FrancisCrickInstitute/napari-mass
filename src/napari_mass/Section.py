@@ -33,19 +33,24 @@ class Section:
     def get_size(self):
         return np.ceil(np.flip(self.lengths)).astype(int)
 
-    def init_features(self, source, detection_params=None):
+    def init_features(self, source, image_function=None, detection_params=None):
         pixel_size = source.get_pixel_size_micrometer()[:2]
         image = self.extract_image(source, pixel_size)
         rotated_image, rotated_image_alt = self.create_rotated_image(image, pixel_size)
-        size_range = detection_params['size_range_um']
-        slice_thickness = detection_params['size_slice_thickness_um']
-        source_pixel_size = source.get_pixel_size_micrometer()[:2]
-        min_area, max_area = radius_to_area_range(size_range, slice_thickness, source_pixel_size)
-        min_npoints = detection_params['min_npoints']
+        if detection_params:
+            slice_thickness = detection_params.get('size_slice_thickness_um')
+            source_pixel_size = source.get_pixel_size_micrometer()[:2]
+            size_range0 = deserialise(get_dict_value(detection_params, 'size_range_um'))
+            size_range = [float(x) for x in size_range0]
+            min_area, max_area = radius_to_area_range(size_range, slice_thickness, source_pixel_size)
+            min_npoints = detection_params.get('min_npoints', 0)
+        else:
+            min_area, max_area = 1, None
+            min_npoints = 0
         self.points, self.size_points, self.keypoints, self.descriptors = \
-            get_image_features(rotated_image, min_area, max_area)
+            get_image_features(rotated_image, image_function, min_area, max_area)
         self.points_alt, self.size_points_alt, self.keypoints_alt, self.descriptors_alt = \
-            get_image_features(rotated_image_alt, min_area, max_area)
+            get_image_features(rotated_image_alt, image_function, min_area, max_area)
 
         if len(self.points) < min_npoints or len(self.points_alt) < min_npoints:
             message = 'Insufficient key points in section'
@@ -173,12 +178,11 @@ class Section:
         }
 
 
-def get_image_features(image0, min_area=1, max_area=None):
-    image = grayscale_image(image0[..., :3])
-    alpha = image0[..., 3]
-    non_zero = image[np.where(alpha)]
-    level = np.quantile(non_zero, 0.99) if len(non_zero) > 0 else 0.5
-    detection_image = float2int_image(image >= level)
+def get_image_features(image, image_function=None, min_area=1, max_area=None):
+    if image_function:
+        detection_image = image_function(image)
+    else:
+        detection_image = grayscale_image(image[..., :3])
     area_points = get_contour_points(detection_image, min_area=min_area, max_area=max_area)
     center = np.flip(image.shape[:2]) / 2
     # center points around (0, 0)
