@@ -59,6 +59,9 @@ class MassWidget(QSplitter):
 
         self.enable_tabs(False, 1)
 
+        self.main_output_widget = self.create_output_widget()
+        napari_viewer.window.add_dock_widget(self.main_output_widget, name='MASS', area='left')
+
     def create_model(self):
         print('creating model')
         # TODO: try to move import to top - reason this work-around works is unclear
@@ -121,10 +124,22 @@ class MassWidget(QSplitter):
         self.align_template_button.clicked.connect(self.on_align_template_clicked)
         self.propagate_template_button = QPushButton('Propagate')
         self.propagate_template_button.clicked.connect(self.on_propagate_template_clicked)
+        self.export_template_image_button = QPushButton('Export image')
+        self.export_template_image_button.clicked.connect(self.on_export_template_image_clicked)
         self.enable_template_controls('none')
         layout.addWidget(self.populate_template_button, 1, 0)
         layout.addWidget(self.align_template_button, 1, 1)
         layout.addWidget(self.propagate_template_button, 1, 2)
+        layout.addWidget(self.export_template_image_button, 1, 3)
+        widget.setLayout(layout)
+        return widget
+
+    def create_output_widget(self):
+        widget = QWidget()
+        layout = QGridLayout()
+        self.export_image_button = QPushButton('Export image')
+        self.export_image_button.clicked.connect(self.on_export_main_image_clicked)
+        layout.addWidget(self.export_image_button)
         widget.setLayout(layout)
         return widget
 
@@ -243,10 +258,12 @@ class MassWidget(QSplitter):
             self.populate_template_button.setEnabled(True)
             self.align_template_button.setEnabled(True)
             self.propagate_template_button.setEnabled(True)
+            self.export_template_image_button.setEnabled(True)
         elif not controls or controls == 'none':
             self.populate_template_button.setEnabled(False)
             self.align_template_button.setEnabled(False)
             self.propagate_template_button.setEnabled(False)
+            self.export_template_image_button.setEnabled(False)
 
     def select_tab(self, index):
         self.tab_index = index  # prevent event loop
@@ -350,7 +367,8 @@ class MassWidget(QSplitter):
         if refesh_data:
             layer_info = self.model.init_data_layer(layer_name, top_path=[DATA_TEMPLATE_KEY])
             self.template_viewer.layers.remove(layer_name)
-            self.template_viewer.add_layer(Layer.create(*layer_info))
+            layer = self.template_viewer.add_layer(Layer.create(*layer_info))
+            layer.events.data.connect(self.on_template_data_changed)
 
     def save_params(self):
         if self.project_set:
@@ -490,6 +508,12 @@ class MassWidget(QSplitter):
                 self.update_data_layers()
         else:
             QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')
+
+    def on_export_main_image_clicked(self):
+        self.model.draw_output()
+
+    def on_export_template_image_clicked(self):
+        self.model.draw_output(top_path=[DATA_TEMPLATE_KEY])
 
 
 widget: MassWidget  # singleton; create once globally

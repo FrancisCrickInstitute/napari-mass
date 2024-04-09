@@ -149,7 +149,7 @@ class DataModel:
         source = self.source
         if source:
             self.source_pixel_size = source.get_pixel_size_micrometer()
-            #self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
+            self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
 
         # hq fluor image
         hq_params = input_params.get('fluor_hq')
@@ -436,6 +436,43 @@ class DataModel:
                         }
                     section[element_name][index] = value
         self.data.save()
+
+    def draw_output(self, layer_names=[], top_path=[DATA_SECTIONS_KEY, '*'],
+                    serial_order_labels=False, stage_order_labels=False):
+        top_element_name = top_path[0]
+        if top_element_name == 'template':
+            back_image = np.mean(self.section_images, axis=0).astype(self.section_images[0].dtype)
+            # TODO: remove alpha channel?
+        else:
+            back_image = self.small_image
+        back_image = color_image(back_image)
+        out_image = np.zeros_like(back_image)
+
+        for layer_name in deserialise(get_dict_value(self.params['input'], 'layers', '')):
+            if not layer_names or layer_name in layer_names:
+                path = top_path + [layer_name]
+                if layer_name in ['rois', 'focus']:
+                    path += ['*']
+                values = self.data.get_values(path)
+                value_type = self.data.get_value_type(layer_name)
+                for index, value in enumerate(values):
+                    element = None
+                    if value_type == 'polygon':
+                        element = Section(value)
+                    elif value_type == 'location':
+                        element = Point(value)
+                    if element:
+                        self.draw_section_element(out_image, element, index,
+                                                  serial_order_labels, stage_order_labels)
+
+        out_image = cv.addWeighted(back_image, 1, out_image, 0.9, gamma=0)
+        filename = f'{top_element_name}'
+        if serial_order_labels:
+            filename += '_ordered'
+        elif stage_order_labels:
+            filename += '_stage_ordered'
+        filename += '.tiff'
+        save_image(join_path(self.outfolder, filename), out_image)
 
 
 

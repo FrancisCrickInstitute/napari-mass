@@ -1,5 +1,5 @@
-NAME = 'MASS'
-VERSION = '0.4.1'
+NAME = 'MassWidget'
+VERSION = '0.5.1'
 
 RESOURCE_DIR = 'resources/'
 PROJECT_TEMPLATE = RESOURCE_DIR + 'template.massproject.yml'
