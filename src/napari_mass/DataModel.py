@@ -387,31 +387,34 @@ class DataModel:
             self.template_section_centers = []
             return False
 
-    def align_sections(self, layer_name, method='cpd', reorder=True):
-        features = {}
-        detection_params = self.params.get(layer_name)
+    def align_sections(self, layer_name, methods=['cpd'], reorder=True):
+        detection_params = self.params.get(layer_name).copy()
+        detection_params['min_npoints'] = 10
         order = self.data.get_values('serial_order/order')
         n = len(order)
-
-        #for index, image in zip(order, self.section_images):
-        #    points, size_points, keypoints, descriptors = \
-        #        get_image_features(image, brightfield_detection_image)
-        #    features[index] = {
-        #        'points': points,
-        #        'size_points': size_points,
-        #        'keypoints': keypoints,
-        #        'descriptors': descriptors
-        #    }
         for section in self.sections:
-            section.init_features(self.source, brightfield_detection_image, detection_params)
+            pixel_size = self.output_pixel_size     # use reduced pixel size
+            section.init_features(self.source, pixel_size, create_brightfield_detection_image, detection_params)
+            #show_image(section.draw_points(self.source, pixel_size))
+
         if reorder:
-            pairs = np.transpose(np.triu_indices(n, 1))
-        else:
-            pairs = [[order[index], order[index + 1]] for index in range(len(order) - 1)]
-        for index1, index2 in pairs:
-            #transform, metrics = align_sections_cpd(features[index1], features[index2])
-            transform, metrics = align_sections_cpd(self.sections[index1], self.sections[index2])
-            print(index1, index2, metrics['match_rate'])
+            for index1, index2 in np.transpose(np.triu_indices(n, 1)):
+                section1, section2 = self.sections[index1], self.sections[index2]
+                metrics = get_section_alignment(section2, section1, methods)[-1]
+                # TODO: store in matrix
+
+        prev_section = None
+        for sectioni in order:
+            section = self.sections[sectioni]
+            if prev_section is not None:
+                center, angle, metrics = get_section_alignment(section, prev_section, methods,
+                                                               w=0.001, max_iter=200, tol=0.1)
+                print('match rate:', metrics['match_rate'])
+                if metrics['match_rate'] > 0.5:
+                    section.center = center
+                    section.angle = angle
+                    # TODO: copy to self.data
+            prev_section = section
 
     def propagate_elements(self, element_name, ref_element_name='sample'):
         value_type = self.data.get_value_type(element_name)
@@ -419,7 +422,8 @@ class DataModel:
             ref_element = section.get(ref_element_name)
             if ref_element:
                 section[element_name] = {}
-                for index, (section_points, section_center) in enumerate(zip(self.template_section_points, self.template_section_centers)):
+                for index, (section_points, section_center) \
+                        in enumerate(zip(self.template_section_points, self.template_section_centers)):
                     # transform corners of template section (relative from center), using transform of each section
                     h = create_transform(angle=ref_element['angle'], translate=ref_element['center'])
                     new_section_center = apply_transform([section_center], h)[0]

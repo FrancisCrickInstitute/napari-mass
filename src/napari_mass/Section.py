@@ -33,25 +33,28 @@ class Section:
     def get_size(self):
         return np.ceil(np.flip(self.lengths)).astype(int)
 
-    def init_features(self, source, image_function=None, detection_params=None):
-        pixel_size = source.get_pixel_size_micrometer()[:2]
+    def init_features(self, source, pixel_size=None, image_function=None, detection_params=None):
+        if pixel_size is None:
+            pixel_size = source.get_pixel_size_micrometer()[:2]
         image = self.extract_image(source, pixel_size)
         rotated_image, rotated_image_alt = self.create_rotated_image(image, pixel_size)
         if detection_params:
-            slice_thickness = detection_params.get('size_slice_thickness_um')
-            source_pixel_size = source.get_pixel_size_micrometer()[:2]
+            slice_thickness = get_dict_value(detection_params, 'size_slice_thickness_um')
             size_range0 = deserialise(get_dict_value(detection_params, 'size_range_um'))
             size_range = [float(x) for x in size_range0]
-            min_area, max_area = radius_to_area_range(size_range, slice_thickness, source_pixel_size)
-            min_npoints = detection_params.get('min_npoints', 0)
+            size_range_px = convert_size_to_pixels(size_range, pixel_size)
+            min_area, max_area = radius_to_area_range(size_range, slice_thickness, pixel_size)
+            min_npoints = get_dict_value(detection_params, 'min_npoints', 1)
         else:
             min_area, max_area = 1, None
-            min_npoints = 0
+            size_range_px = convert_size_to_pixels([1, 10], pixel_size)
+            min_npoints = 1
         self.points, self.size_points, self.keypoints, self.descriptors = \
-            get_image_features(rotated_image, image_function, min_area, max_area)
+            get_image_features(rotated_image, image_function, size_range_px, min_area, max_area)
         self.points_alt, self.size_points_alt, self.keypoints_alt, self.descriptors_alt = \
-            get_image_features(rotated_image_alt, image_function, min_area, max_area)
+            get_image_features(rotated_image_alt, image_function, size_range_px, min_area, max_area)
 
+        print(len(self.points))
         if len(self.points) < min_npoints or len(self.points_alt) < min_npoints:
             message = 'Insufficient key points in section'
             raise ValueError(message)
@@ -150,8 +153,10 @@ class Section:
         nchannels = out_image.shape[2] if len(out_image.shape) > 2 else 1
         if labels is None:
             labels = range(len(size_points))
+        image_center = get_image_size(out_image) / 2
         for label, size_point in zip(labels, size_points):
-            center, area = size_point
+            center0, area = size_point
+            center = np.int0(center0 + image_center)
             radius = math.sqrt(area / math.pi) * 2
             if point_color is None:
                 color = color_float_to_cv(colors[int(label) % len(colors)])
@@ -159,7 +164,7 @@ class Section:
                 color = point_color
             if len(color) < nchannels:
                 color = list(color) + [255]
-            cv.circle(out_image, np.int0(center), int(radius), color, thickness=thickness)
+            cv.circle(out_image, center, int(radius), color, thickness=thickness)
             #draw_text(out_image, str(label), center, font_size, thickness, color)
         draw_text(out_image, f'N={len(size_points)}', None, font_size, thickness, [127, 127, 127])
         return out_image
@@ -178,9 +183,9 @@ class Section:
         }
 
 
-def get_image_features(image, image_function=None, min_area=1, max_area=None):
+def get_image_features(image, image_function=None, size_range=None, min_area=1, max_area=None):
     if image_function:
-        detection_image = image_function(image)
+        detection_image = image_function(image, size_range=size_range)
     else:
         detection_image = grayscale_image(image[..., :3])
     area_points = get_contour_points(detection_image, min_area=min_area, max_area=max_area)

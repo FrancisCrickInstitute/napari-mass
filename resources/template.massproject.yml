@@ -40,7 +40,7 @@ magnet:
 sample:
   pixel_size: {value: 12um}
   shape: {value: 4}
-  size_range_um: {value: '1, 10'}
+  size_range_um: {value: '10, 25'}
   min_match_rate: {value: 0.5}
   snap_scaledown: {value: 0.25}
   snap_margin: {value: 0.2}

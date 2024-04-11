@@ -7,12 +7,10 @@ from napari_mass.image.util import *
 from napari_mass.util import *
 
 
-def align_sections_metrics(source_section, target_section, matching_methods,
-                           lowe_ratio=None, max_iter=100, min_match_rate=0.5):
+def align_sections_metrics(source_section, target_section, matching_methods, min_match_rate=0.5, **params):
     results = None
     for method in matching_methods:
-        results0 = align_sections(source_section, target_section,
-                                  method=method, lowe_ratio=lowe_ratio, max_iter=max_iter)
+        results0 = align_sections(source_section, target_section, method=method, **params)
         if results is None or results0[1]['match_rate'] > results[1]['match_rate']:
             results = results0
         if results[1]['match_rate'] >= min_match_rate:
@@ -20,11 +18,9 @@ def align_sections_metrics(source_section, target_section, matching_methods,
     return results
 
 
-def get_section_alignment(source_section, target_section, matching_methods,
-                          lowe_ratio=None, max_iter=100, min_match_rate=0.5):
+def get_section_alignment(source_section, target_section, matching_methods, min_match_rate=0.5, **params):
     h_coarse = create_transform(angle=-source_section.angle, create3x3=True)
-    h_align, metrics = align_sections_metrics(source_section, target_section, matching_methods,
-                                              lowe_ratio=lowe_ratio, max_iter=max_iter, min_match_rate=min_match_rate)
+    h_align, metrics = align_sections_metrics(source_section, target_section, matching_methods, min_match_rate, **params)
     h_full = combine_transforms([h_coarse, h_align])
     center = source_section.center - get_transform_pre_offset(h_full)
     angle = -get_transform_angle(h_full)
@@ -38,11 +34,11 @@ def get_features(image, keypoints):
     return descriptors
 
 
-def align_sections(source_section, target_section, method='features', lowe_ratio=None, max_iter=100):
+def align_sections(source_section, target_section, method='features', **params):
     if method.lower().startswith('cpd'):
-        return align_sections_cpd(source_section, target_section, lowe_ratio=lowe_ratio, max_iter=max_iter)
+        return align_sections_cpd(source_section, target_section, **params)
     else:
-        return align_sections_features(source_section, target_section, lowe_ratio=lowe_ratio)
+        return align_sections_features(source_section, target_section, **params)
 
 
 def align_sections_features(source_section, target_section, lowe_ratio=None):
@@ -96,9 +92,9 @@ def align_points(source_points, source_descriptors, target_points, target_descri
     return transform, metrics
 
 
-def align_sections_cpd(source_section, target_section, lowe_ratio=None, max_iter=100):
+def align_sections_cpd(source_section, target_section, lowe_ratio=None, w=0.00001, max_iter=100, tol=0.1):
     # CPD: use_cuda doesn't seem to work (well) - might be a cupy (version) issue?
-    result_cpd = cpd.registration_cpd(source_section.points, target_section.points, w=0.00001, maxiter=max_iter, tol=0.1)
+    result_cpd = cpd.registration_cpd(source_section.points, target_section.points, w=w, maxiter=max_iter, tol=tol)
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
     transformation = result_cpd.transformation
     transformed_source_points0 = transformation.transform(source_section.points)

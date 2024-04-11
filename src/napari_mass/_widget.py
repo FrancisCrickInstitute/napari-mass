@@ -48,6 +48,7 @@ class MassWidget(QSplitter):
         self.section_order_mode = False
         self.section_ordering = False
         self.section_order = []
+        self.selected_layer = None
 
         self.template_viewer = ViewerModel()
         self.template_widget = self.create_view_widget(self.template_viewer)
@@ -275,10 +276,13 @@ class MassWidget(QSplitter):
                 enabled = (name in get_dict_value(self.params, 'input.layers'))
                 self.params_widget.setTabEnabled(index, enabled)
 
-    def select_layer(self, name):
+    def select_layer(self, layer_name=None):
         if self.main_viewer.layers:
-            if name in self.main_viewer.layers:
-                self.main_viewer.layers.selection.active = self.main_viewer.layers[name]
+            if layer_name is None:
+                layer_name = self.selected_layer
+            if layer_name in self.main_viewer.layers:
+                self.main_viewer.layers.selection.active = self.main_viewer.layers[layer_name]
+                self.selected_layer = layer_name
 
     def select_template_layer(self, name):
         if self.template_viewer.layers:
@@ -330,6 +334,7 @@ class MassWidget(QSplitter):
             self.select_layer(current_tab)
             self.select_template_layer(current_tab)
             self.tab_index = new_index
+            self.selected_layer = current_tab
 
     def on_layer_selection_changed(self, event):
         # also triggered when new layer added (and auto-selected)
@@ -339,6 +344,7 @@ class MassWidget(QSplitter):
             self.select_template_layer(layer_name)
             if layer_name in self.tab_names:
                 self.select_tab(self.tab_names.index(layer_name))
+            self.selected_layer = layer_name
         self.shape_copy_mode = False
 
     def on_layer_mode_changed(self, event):
@@ -401,6 +407,7 @@ class MassWidget(QSplitter):
                         #layer.events.contrast_limits.connect(self.on_layer_contrast_limits_changed)
                 else:
                     self.main_viewer.add_layer(Layer.create(*layer_info))
+            self.select_layer('sample')
         else:
             QMessageBox.warning(self, 'Source input', 'No source image loaded')
 
@@ -448,6 +455,7 @@ class MassWidget(QSplitter):
             if layer_name in self.main_viewer.layers:
                 self.main_viewer.layers.remove(layer_name)
             self.main_viewer.add_layer(Layer.create(*layer_info))
+        self.select_layer()
 
     def detect_sample(self):
         pass
@@ -484,6 +492,7 @@ class MassWidget(QSplitter):
                     main_layer = self.main_viewer.layers.selection.active
                     self.select_template_layer(main_layer.name)
                     self.enable_template_controls('all')
+                    self.select_layer('rois')
             else:
                 QMessageBox.warning(self, 'MASS', 'No layer data to populate')
         else:
@@ -496,6 +505,7 @@ class MassWidget(QSplitter):
             self.model.align_sections(layer_name, reorder=False)
             self.on_populate_template_clicked()
             self.update_data_layers()
+            self.select_layer('rois')
         else:
             QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')
 

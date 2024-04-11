@@ -122,6 +122,10 @@ def norm_angle_180(angle):
     return angle
 
 
+def convert_size_to_pixels(size_range, source_pixel_size):
+    return np.divide(size_range, np.mean(source_pixel_size[:2]))
+
+
 def radius_to_area_range(size_range, slice_thickness, source_pixel_size):
     r_min = size_range[0] / 2 * 0.75  # diameter -> radius with error margin
     if slice_thickness is not None:

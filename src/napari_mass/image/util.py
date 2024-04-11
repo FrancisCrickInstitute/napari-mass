@@ -440,17 +440,30 @@ def fluor_detection_image(image):
     return detection_image
 
 
-def brightfield_detection_image(image):
+def create_brightfield_detection_image(image, size_range):
+    detection_image = None
     alpha = image[..., 3]
     values = image[np.where(alpha)]
     image = grayscale_image(image[..., :3])
     if np.median(values) > 0.25:
         # light background
-        image2 = 1 - image
+        positive_image = 1 - image
     else:
-        image2 = image
-    image2[np.where(1 - alpha)] = 0
-    _, detection_image = cv.threshold(float2int_image(image2), 0, 255, cv.THRESH_OTSU)
+        positive_image = image
+    positive_image[np.where(1 - alpha)] = 0
+    int_image = float2int_image(positive_image)
+    #_, detection_image = cv.threshold(int_image, 0, 255, cv.THRESH_OTSU)
+    blocksize = int(size_range[1]) * 4
+    if blocksize % 2 == 0:
+        blocksize += 1
+    value_offset = 0
+    ntotal = np.sum(alpha) / 1 * 255
+    value_rate = 1
+    while value_rate > 0.2:
+        detection_image = cv.adaptiveThreshold(int_image, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY,
+                                               blocksize, value_offset)
+        value_rate = np.sum(detection_image) / ntotal
+        value_offset -= 2
     return detection_image
 
 
