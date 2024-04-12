@@ -478,33 +478,36 @@ class MassWidget(QSplitter):
         self.template_viewer.layers.clear()
         layer_name = self.main_viewer.layers.selection.active.name
         if layer_name in valid_layers:
-            image_stack = np.array(self.model.get_section_images(layer_name))
-            layer_scale = self.model.get_output_scale()
-            if len(image_stack) > 0:
-                self.template_viewer.add_image(image_stack, scale=layer_scale)
-                self.template_viewer.dims.set_point(0, 0)  # set index to 0
-                self.model.init_sample_template()
-                layer_infos = self.model.init_data_layers([DATA_TEMPLATE_KEY])
-                if layer_infos:
-                    for layer_info in layer_infos.values():
-                        layer = self.template_viewer.add_layer(Layer.create(*layer_info))
-                        layer.events.data.connect(self.on_template_data_changed)
-                    main_layer = self.main_viewer.layers.selection.active
-                    self.select_template_layer(main_layer.name)
-                    self.enable_template_controls('all')
-                    self.select_layer('rois')
-            else:
+            if not self.update_template_layers():
                 QMessageBox.warning(self, 'MASS', 'No layer data to populate')
         else:
             QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')
+
+    def update_template_layers(self):
+        layer_name = self.main_viewer.layers.selection.active.name
+        image_stack = np.array(self.model.get_section_images(layer_name))
+        layer_scale = self.model.get_output_scale()
+        if len(image_stack) > 0:
+            self.template_viewer.add_image(image_stack, scale=layer_scale)
+            self.template_viewer.dims.set_point(0, 0)  # set index to 0
+            self.model.init_sample_template()
+            layer_infos = self.model.init_data_layers([DATA_TEMPLATE_KEY])
+            if layer_infos:
+                for layer_info in layer_infos.values():
+                    layer = self.template_viewer.add_layer(Layer.create(*layer_info))
+                    layer.events.data.connect(self.on_template_data_changed)
+                main_layer = self.main_viewer.layers.selection.active
+                self.select_template_layer(main_layer.name)
+                self.enable_template_controls('all')
+            return True
+        return False
 
     def on_align_template_clicked(self):
         valid_layers = ['magnet', 'sample']
         layer_name = self.main_viewer.layers.selection.active.name
         if layer_name in valid_layers:
             self.model.align_sections(layer_name, reorder=False)
-            self.on_populate_template_clicked()
-            self.update_data_layers()
+            self.update_template_layers()
             self.select_layer('rois')
         else:
             QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')

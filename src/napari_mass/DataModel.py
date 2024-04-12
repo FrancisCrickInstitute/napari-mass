@@ -409,12 +409,17 @@ class DataModel:
             if prev_section is not None:
                 center, angle, metrics = get_section_alignment(section, prev_section, methods,
                                                                w=0.001, max_iter=200, tol=0.1)
-                print('match rate:', metrics['match_rate'])
-                if metrics['match_rate'] > 0.5:
+                print('match rate:', metrics['match_rate'],
+                      'dcenter:', math.dist(section.center, center),
+                      'dangle:', get_angle_dif(section.angle, angle))
+                if metrics['match_rate'] > 0.1:
                     section.center = center
                     section.angle = angle
-                    # TODO: copy to self.data
+                    element = self.data['sections'][sectioni][layer_name]
+                    element['center'] = center
+                    element['angle'] = angle
             prev_section = section
+        #self.data.save()
 
     def propagate_elements(self, element_name, ref_element_name='sample'):
         value_type = self.data.get_value_type(element_name)
