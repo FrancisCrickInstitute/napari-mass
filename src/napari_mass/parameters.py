@@ -1,4 +1,4 @@
-NAME = 'MassWidget'
+NAME = 'MASS'
 VERSION = '0.5.1'
 
 RESOURCE_DIR = 'resources/'
