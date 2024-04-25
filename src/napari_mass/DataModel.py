@@ -36,12 +36,10 @@ from napari_mass.file.FileDict import FileDict
 from napari_mass.file.csv_file import csv_write
 from napari_mass.file.DataFile import DataFile
 from napari_mass.ExternalTspSolver import ExternalTspSolver
-from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics, \
-    align_sections_cpd
+from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics
 from napari_mass.Point import Point
 from napari_mass.section_detection import create_detection_image, detect_magsections, detect_nearest_edges
-from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images, \
-    get_image_features
+from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
 from napari_mass.TiffTileSource import TiffTileSource
 from napari_mass.OmeZarrSource import OmeZarrSource
 from napari_mass.parameters import *
@@ -392,15 +390,20 @@ class DataModel:
         detection_params['min_npoints'] = 10
         order = self.data.get_values('serial_order/order')
         n = len(order)
+
+        pixel_size = self.output_pixel_size  # use reduced pixel size
+        target_size = get_section_sizes(self.sections, pixel_size)[1]
+
         for section in self.sections:
-            pixel_size = self.output_pixel_size     # use reduced pixel size
-            section.init_features(self.source, pixel_size, create_brightfield_detection_image, detection_params)
+            section.init_features(self.source, pixel_size, target_size,
+                                  create_brightfield_detection_image,
+                                  detection_params)
             #show_image(section.draw_points(self.source, pixel_size))
 
         if reorder:
             for index1, index2 in np.transpose(np.triu_indices(n, 1)):
                 section1, section2 = self.sections[index1], self.sections[index2]
-                metrics = get_section_alignment(section2, section1, methods)[-1]
+                metrics = align_sections_metrics(section2, section1, methods)[-1]
                 # TODO: store in matrix
 
         prev_section = None
@@ -408,16 +411,38 @@ class DataModel:
             section = self.sections[sectioni]
             if prev_section is not None:
                 center, angle, metrics = get_section_alignment(section, prev_section, methods,
+                                                               pixel_size=pixel_size,
                                                                w=0.001, max_iter=200, tol=0.1)
-                print('match rate:', metrics['match_rate'],
-                      'dcenter:', math.dist(section.center, center),
-                      'dangle:', get_angle_dif(section.angle, angle))
+                print('before fine alignment:', end=' ')
+                print(f'match rate: {metrics["match_rate"]:.3f}',
+                      f'dcenter: {math.dist(section.center, center):.3f}',
+                      f'dangle: {get_angle_dif(section.angle, angle):.3f}')
+                # TODO: transform has scale as well which is currently ignored
                 if metrics['match_rate'] > 0.1:
+                    # 1. adjust section using fine alignment
                     section.center = center
                     section.angle = angle
                     element = self.data['sections'][sectioni][layer_name]
                     element['center'] = center
                     element['angle'] = angle
+
+                    # 2. re-init points
+                    section.init_features(self.source, pixel_size, target_size,
+                                          create_brightfield_detection_image,
+                                          detection_params)
+                    center, angle, metrics = get_section_alignment(section, prev_section, methods,
+                                                                   pixel_size=pixel_size,
+                                                                   w=0.001, max_iter=200, tol=0.1)
+                    print('after fine alignment: ', end=' ')
+                    print(f'match rate: {metrics["match_rate"]:.3f}',
+                          f'dcenter: {math.dist(section.center, center):.3f}',
+                          f'dangle: {get_angle_dif(section.angle, angle):.3f}')
+                    # 3. store position map
+                    matched_section_points = [match[0] for match in metrics['matched_points']]
+                    matched_prev_section_points = [match[1] for match in metrics['matched_points']]
+                    # visualise
+                    #show_image(self.draw_image_points_overlay(section.image, prev_section.image, matched_section_points, matched_prev_section_points))
+
             prev_section = section
         #self.data.save()
 
@@ -483,6 +508,22 @@ class DataModel:
         filename += '.tiff'
         save_image(join_path(self.outfolder, filename), out_image)
 
+    def draw_image_points_overlay(self, image1, image2, points1, points2, draw_size=2,
+                                  color1=[1, 0, 0], color2=[0, 0, 1], line_color=[1, 1, 1], text_color=[0.5, 0.5, 0.5]):
+        image = np.atleast_3d(image1) * color1 + np.atleast_3d(image2) * color2
+
+        image_center = np.flip(image.shape[:2]) / 2
+        color1 = np.clip(np.array(color1) + 0.5, 0, 1) * 255
+        color2 = np.clip(np.array(color2) + 0.5, 0, 1) * 255
+        text_color = (np.array(text_color) * 255).tolist()
+        line_color = (np.array(line_color) * 255).tolist()
+        draw_points_cv(image, points1 + image_center, color1, draw_size=draw_size)
+        draw_points_cv(image, points2 + image_center, color2, draw_size=draw_size)
+        lines = [(p1 + image_center, p2 + image_center) for p1, p2 in zip(points1, points2)]
+        draw_lines_cv(image, lines, line_color, draw_size=draw_size)
+        label_positions = [np.mean(p2, 0) + image_center for p2 in zip(points1, points2)]
+        draw_labels_cv(image, label_positions, text_color, draw_size=draw_size)
+        return image
 
 
 
@@ -872,6 +913,7 @@ class DataModel:
                 except Exception as e:
                     logging.exception('Calculating distance matrix element')
                     raise e
+                metrics.pop('matches', None)
                 metrics.pop('matched_points', None)
                 self.matches[index] = metrics
                 self.transforms[index] = transform.tolist()

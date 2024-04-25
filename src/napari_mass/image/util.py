@@ -876,3 +876,26 @@ def draw_point_sets(points1, points2, matches=None, title='', show=True):
     if show:
         plt.show()
     return plt
+
+
+def draw_points_cv(image, points, color, draw_size=1):
+    thickness = draw_size
+    for point in points:
+        position = np.round(point).astype(int)
+        cv.drawMarker(image, position, color, cv.MARKER_CROSS, draw_size * 2, thickness, line_type=cv.LINE_AA)
+
+
+def draw_lines_cv(image, points, color, draw_size=1):
+    thickness = draw_size
+    for points2 in points:
+        point1 = np.round(points2[0]).astype(int)
+        point2 = np.round(points2[1]).astype(int)
+        cv.line(image, point1, point2, color, thickness, lineType=cv.LINE_AA)
+
+
+def draw_labels_cv(image, points, color, draw_size=1):
+    thickness = draw_size
+    font_size = int(np.ceil(draw_size * 0.25))
+    for index, point in enumerate(points):
+        position = np.round(point).astype(int)
+        cv.putText(image, str(index), position, cv.FONT_HERSHEY_SIMPLEX, font_size, color, thickness, lineType=cv.LINE_AA)

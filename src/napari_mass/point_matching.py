@@ -1,5 +1,6 @@
 import numpy as np
 import cv2 as cv
+import skimage
 from probreg import cpd
 from sklearn.metrics import euclidean_distances
 
@@ -18,11 +19,11 @@ def align_sections_metrics(source_section, target_section, matching_methods, min
     return results
 
 
-def get_section_alignment(source_section, target_section, matching_methods, min_match_rate=0.5, **params):
+def get_section_alignment(source_section, target_section, matching_methods, min_match_rate=0.5, pixel_size=1, **params):
     h_coarse = create_transform(angle=-source_section.angle, create3x3=True)
     h_align, metrics = align_sections_metrics(source_section, target_section, matching_methods, min_match_rate, **params)
     h_full = combine_transforms([h_coarse, h_align])
-    center = source_section.center - get_transform_pre_offset(h_full)
+    center = source_section.center - get_transform_pre_offset(h_full) * pixel_size
     angle = -get_transform_angle(h_full)
     return center, angle, metrics
 
@@ -35,7 +36,9 @@ def get_features(image, keypoints):
 
 
 def align_sections(source_section, target_section, method='features', **params):
-    if method.lower().startswith('cpd'):
+    if 'flow' in method.lower():
+        return align_sections_flow(source_section, target_section, **params)
+    elif 'cpd' in method.lower():
         return align_sections_cpd(source_section, target_section, **params)
     else:
         return align_sections_features(source_section, target_section, **params)
@@ -101,20 +104,41 @@ def align_sections_cpd(source_section, target_section, lowe_ratio=None, w=0.0000
     transformed_source_points = [(point0, size_point[1])
                                  for point0, size_point in zip(transformed_source_points0, source_section.size_points)]
     metrics = get_match_metrics(target_section.size_points, transformed_source_points, nn_distance, lowe_ratio)
+    metrics['matched_points'] = [(source_section.points[s], target_section.points[t])
+                                 for t, s in metrics['matches']]
     # transform() = scale * dot(points, rot.T) + t
     transform = np.hstack([transformation.scale * transformation.rot, np.atleast_2d(transformation.t).T])
+    return transform, metrics
+
+
+def align_sections_flow(source_section, target_section, lowe_ratio=None, **params):
+    # TODO: WIP, suggest removal
+    nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
+    #v, u = skimage.registration.optical_flow_ilk(source_section.image, target_section.image, radius=nn_distance)
+    v, u = skimage.registration.optical_flow_tvl1(source_section.image, target_section.image)
+    norm = np.sqrt(u ** 2 + v ** 2)
+    transform = None    # get transform from registration
+
+    #transformed_source_points0 = skimage.transform.warp(source_section.points)
+    transformed_source_points0 = transform.estimate(source_section.points)
+    transformed_source_points = [(point0, size_point[1])
+                                 for point0, size_point in zip(transformed_source_points0, source_section.size_points)]
+    metrics = get_match_metrics(target_section.size_points, transformed_source_points, nn_distance, lowe_ratio)
     return transform, metrics
 
 
 def get_match_metrics(points0, points1, nn_distance, lowe_ratio=None):
     results = {}
     # greedy assignment
-    if len(points0) == 0 or len(points1) == 0:
+    npoints0, npoints1 = len(points0), len(points1)
+    npoints = min(npoints0, npoints1)
+    if npoints0 == 0 or npoints1 == 0:
         return 0, np.inf, 0, np.inf, np.array([])
-    has_size_points = (not np.isscalar(points0[0][0]))
+    has_size_points = not np.isscalar(points0[0][0])
 
     threshold = nn_distance / 4
-    if len(points0) > len(points1):
+    swapped = (npoints0 > npoints1)
+    if swapped:
         points0, points1 = points1, points0
     if has_size_points:
         sizes0 = [size for point, size in points0]
@@ -134,13 +158,11 @@ def get_match_metrics(points0, points1, nn_distance, lowe_ratio=None):
     sorted_matches = np.argsort(distances0)
 
     done = []
-    matches0 = []
-    matches1 = []
+    point_matches = []
     nmatches = 0
     tot_weight = 0
     weight = 0
     matching_distances = []
-    matched_points = []
     for sorted_match in sorted_matches:
         i, match = matches[sorted_match]
         if has_size_points:
@@ -150,25 +172,27 @@ def get_match_metrics(points0, points1, nn_distance, lowe_ratio=None):
                 # found best, available match
                 distance0 = distance_matrix[i, j]
                 distance1 = distance_matrix[i, match[ji + 1]] if ji + 1 < len(match) else np.inf
-                matching_distances.append(distance0)
+                matching_distances.append(distance0)    # use all distances to weigh in non-matches
                 if distance0 < threshold and (lowe_ratio is None or distance0 < lowe_ratio * distance1):
-                    matches0.append(i)
-                    matches1.append(j)
                     done.append(j)
+                    if swapped:
+                        match = j, i
+                    else:
+                        match = i, j
+                    point_matches.append(match)
                     nmatches += 1
                     if has_size_points:
                         weight += sizes0[i]
-                    matched_points.append(points0[i])
                 break
 
     if has_size_points:
         results['size_match_rate'] = weight / tot_weight
     results['nmatches'] = nmatches
-    results['match_rate'] = nmatches / min(len(points0), len(points1)) if nmatches > 0 else 0
+    results['match_rate'] = nmatches / npoints if npoints > 0 else 0
     distance = np.mean(matching_distances) if nmatches > 0 else np.inf
     results['distance'] = float(distance)
     results['norm_distance'] = float(distance / nn_distance)
-    results['matched_points'] = np.array(matched_points)
+    results['matches'] = np.array(point_matches)
     return results
 
 
