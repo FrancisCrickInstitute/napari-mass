@@ -16,6 +16,10 @@ def align_sections_metrics(source_section, target_section, matching_methods, min
             results = results0
         if results[1]['match_rate'] >= min_match_rate:
             break
+    if results is not None:
+        metrics = results[1]
+        metrics['matched_points'] = [(source_section.points[s], target_section.points[t])
+                                     for t, s in metrics['matches']]
     return results
 
 
@@ -44,9 +48,9 @@ def align_sections(source_section, target_section, method='features', **params):
         return align_sections_features(source_section, target_section, **params)
 
 
-def align_sections_features(source_section, target_section, lowe_ratio=None):
+def align_sections_features(source_section, target_section, lowe_ratio=None, distance_factor=1, **params):
     # image feature descriptors
-    nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
+    nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance]) * distance_factor
     ransac_threshold = nn_distance
 
     transform1, metrics1 = \
@@ -95,17 +99,16 @@ def align_points(source_points, source_descriptors, target_points, target_descri
     return transform, metrics
 
 
-def align_sections_cpd(source_section, target_section, lowe_ratio=None, w=0.00001, max_iter=100, tol=0.1):
+def align_sections_cpd(source_section, target_section, distance_factor=1,
+                       lowe_ratio=None, w=0.00001, max_iter=100, tol=0.1):
     # CPD: use_cuda doesn't seem to work (well) - might be a cupy (version) issue?
     result_cpd = cpd.registration_cpd(source_section.points, target_section.points, w=w, maxiter=max_iter, tol=tol)
-    nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
+    nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance]) * distance_factor
     transformation = result_cpd.transformation
     transformed_source_points0 = transformation.transform(source_section.points)
     transformed_source_points = [(point0, size_point[1])
                                  for point0, size_point in zip(transformed_source_points0, source_section.size_points)]
     metrics = get_match_metrics(target_section.size_points, transformed_source_points, nn_distance, lowe_ratio)
-    metrics['matched_points'] = [(source_section.points[s], target_section.points[t])
-                                 for t, s in metrics['matches']]
     # transform() = scale * dot(points, rot.T) + t
     transform = np.hstack([transformation.scale * transformation.rot, np.atleast_2d(transformation.t).T])
     return transform, metrics
@@ -114,13 +117,44 @@ def align_sections_cpd(source_section, target_section, lowe_ratio=None, w=0.0000
 def align_sections_flow(source_section, target_section, lowe_ratio=None, **params):
     # TODO: WIP, suggest removal
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
-    #v, u = skimage.registration.optical_flow_ilk(source_section.image, target_section.image, radius=nn_distance)
-    v, u = skimage.registration.optical_flow_tvl1(source_section.image, target_section.image)
+    source_image = source_section.image
+    #v, u = skimage.registration.optical_flow_ilk(source_image, target_section.image, radius=nn_distance)
+    v, u = skimage.registration.optical_flow_tvl1(target_section.image, source_image)
     norm = np.sqrt(u ** 2 + v ** 2)
-    transform = None    # get transform from registration
 
-    #transformed_source_points0 = skimage.transform.warp(source_section.points)
-    transformed_source_points0 = transform.estimate(source_section.points)
+    # Inverse coordinate map, which transforms coordinates in the output images
+    # into their corresponding coordinates in the input image.
+    h, w = source_image.shape
+    y_coords, x_coords = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
+    inverse_map = np.array([y_coords + v, x_coords + u])
+
+    # testing: overlay image
+    source_image_warped = skimage.transform.warp(source_image, inverse_map, mode='edge', preserve_range=True).astype(source_image.dtype)
+    overlay_image = np.atleast_3d(target_section.image) * [1, 0, 0] + np.atleast_3d(source_image_warped) * [0, 0, 1]
+
+    # testing: show magnitude and vector field
+    nvec = 20  # Number of vectors to be displayed along each image dimension
+    nl, w = source_section.image.shape
+    step = max(nl // nvec, w // nvec)
+
+    y, x = np.mgrid[:nl:step, :w:step]
+    u_ = u[::step, ::step]
+    v_ = v[::step, ::step]
+
+    plt.imshow(norm)
+    plt.quiver(x, y, u_, v_, color='r', units='dots', angles='xy', scale_units='xy', lw=3)
+    plt.tight_layout()
+    plt.show()
+
+    # get transform from registration
+    transform = inverse_map
+    # apply transform to source points
+    # TODO: fix calculation (apply inverse from inverse_map?)
+    transformed_source_points0 = []
+    for point in source_section.points:
+        index = tuple(np.round(point).astype(int).tolist())
+        tpoint = point + (u[index], v[index])
+        transformed_source_points0.append(tpoint)
     transformed_source_points = [(point0, size_point[1])
                                  for point0, size_point in zip(transformed_source_points0, source_section.size_points)]
     metrics = get_match_metrics(target_section.size_points, transformed_source_points, nn_distance, lowe_ratio)

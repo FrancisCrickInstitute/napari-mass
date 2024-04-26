@@ -385,7 +385,9 @@ class DataModel:
             self.template_section_centers = []
             return False
 
-    def align_sections(self, layer_name, methods=['cpd'], reorder=True):
+    def align_sections(self, layer_name, reorder=True):
+        methods = ['flow']
+        distance_factor = 1
         detection_params = self.params.get(layer_name).copy()
         detection_params['min_npoints'] = 10
         order = self.data.get_values('serial_order/order')
@@ -394,11 +396,9 @@ class DataModel:
         pixel_size = self.output_pixel_size  # use reduced pixel size
         target_size = get_section_sizes(self.sections, pixel_size)[1]
 
-        for section in self.sections:
-            section.init_features(self.source, pixel_size, target_size,
-                                  create_brightfield_detection_image,
-                                  detection_params)
-            #show_image(section.draw_points(self.source, pixel_size))
+        init_section_features(self.sections, source=self.source, pixel_size=pixel_size, target_size=target_size,
+                              image_function=create_brightfield_detection_image,
+                              detection_params=detection_params)
 
         if reorder:
             for index1, index2 in np.transpose(np.triu_indices(n, 1)):
@@ -411,12 +411,8 @@ class DataModel:
             section = self.sections[sectioni]
             if prev_section is not None:
                 center, angle, metrics = get_section_alignment(section, prev_section, methods,
-                                                               pixel_size=pixel_size,
+                                                               pixel_size=pixel_size, distance_factor=distance_factor,
                                                                w=0.001, max_iter=200, tol=0.1)
-                print('before fine alignment:', end=' ')
-                print(f'match rate: {metrics["match_rate"]:.3f}',
-                      f'dcenter: {math.dist(section.center, center):.3f}',
-                      f'dangle: {get_angle_dif(section.angle, angle):.3f}')
                 # TODO: transform has scale as well which is currently ignored
                 if metrics['match_rate'] > 0.1:
                     # 1. adjust section using fine alignment
@@ -431,9 +427,8 @@ class DataModel:
                                           create_brightfield_detection_image,
                                           detection_params)
                     center, angle, metrics = get_section_alignment(section, prev_section, methods,
-                                                                   pixel_size=pixel_size,
+                                                                   pixel_size=pixel_size, distance_factor=distance_factor,
                                                                    w=0.001, max_iter=200, tol=0.1)
-                    print('after fine alignment: ', end=' ')
                     print(f'match rate: {metrics["match_rate"]:.3f}',
                           f'dcenter: {math.dist(section.center, center):.3f}',
                           f'dangle: {get_angle_dif(section.angle, angle):.3f}')
@@ -441,7 +436,7 @@ class DataModel:
                     matched_section_points = [match[0] for match in metrics['matched_points']]
                     matched_prev_section_points = [match[1] for match in metrics['matched_points']]
                     # visualise
-                    #show_image(self.draw_image_points_overlay(section.image, prev_section.image, matched_section_points, matched_prev_section_points))
+                    show_image(self.draw_image_points_overlay(section.image, prev_section.image, matched_section_points, matched_prev_section_points))
 
             prev_section = section
         #self.data.save()
@@ -521,8 +516,8 @@ class DataModel:
         draw_points_cv(image, points2 + image_center, color2, draw_size=draw_size)
         lines = [(p1 + image_center, p2 + image_center) for p1, p2 in zip(points1, points2)]
         draw_lines_cv(image, lines, line_color, draw_size=draw_size)
-        label_positions = [np.mean(p2, 0) + image_center for p2 in zip(points1, points2)]
-        draw_labels_cv(image, label_positions, text_color, draw_size=draw_size)
+        #label_positions = [np.mean(p2, 0) + image_center for p2 in zip(points1, points2)]
+        #draw_labels_cv(image, label_positions, text_color, draw_size=draw_size)
         return image
 
 

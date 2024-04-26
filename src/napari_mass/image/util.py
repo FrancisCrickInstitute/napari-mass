@@ -28,6 +28,7 @@ def show_image(image, title='', cmap=None):
     plt.imshow(image, cmap=cmap)
     if title != '':
         plt.title(title)
+    plt.tight_layout()
     plt.show()
 
 
@@ -589,8 +590,11 @@ def reshape_grow_image(image, target_size, center=True):
     return reshaped_image
 
 
-def rotate_image(image, angle, center):
+def rotate_image(image, angle, center=None):
     (h, w) = image.shape[:2]
+
+    if center is None:
+        center = np.array((w, h)) / 2
 
     transform = cv.getRotationMatrix2D(center, angle, 1)
     cos = np.abs(transform[0, 0])

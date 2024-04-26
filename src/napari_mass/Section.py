@@ -34,7 +34,7 @@ class Section:
         lengths = np.divide(np.flip(self.lengths), pixel_size)
         return np.ceil(lengths).astype(int)
 
-    def init_features(self, source, pixel_size=None, target_image_size=None, image_function=None, detection_params=None):
+    def init_features(self, source, pixel_size=None, target_size=None, image_function=None, detection_params=None):
         if pixel_size is None:
             pixel_size = source.get_pixel_size_micrometer()[:2]
         image = self.extract_image(source, pixel_size)
@@ -57,13 +57,14 @@ class Section:
             detection_image = grayscale_image(rotated_image[..., :3])
 
         self.image = detection_image
-        if target_image_size is not None:
-            self.image = reshape_image(self.image, target_image_size)
-
+        if target_size is not None:
+            self.image = reshape_image(self.image, target_size)
         self.points, self.size_points, self.keypoints, self.descriptors = \
             get_image_features(detection_image, min_area, max_area)
-        #self.points_alt, self.size_points_alt, self.keypoints_alt, self.descriptors_alt = \
-        #    get_image_features(detection_image_alt, size_range_px, min_area, max_area)
+
+        detection_image_alt = rotate_image(detection_image, 180)
+        self.points_alt, self.size_points_alt, self.keypoints_alt, self.descriptors_alt = \
+            get_image_features(detection_image_alt, min_area, max_area)
 
         #print(len(self.points))
         if len(self.points) < min_npoints:  # or len(self.points_alt) < min_npoints:
@@ -122,7 +123,7 @@ class Section:
             image = np.dstack([cropped, mask])
         else:
             image = cropped
-        rotated_image = rotate_image(image, -self.angle + 90, (w / 2, h / 2))
+        rotated_image = rotate_image(image, -self.angle + 90)
         image = reshape_image(rotated_image, np.flip(size))
         return image
 
@@ -206,10 +207,10 @@ def get_image_features(image, min_area=1, max_area=None):
     return points, size_points, keypoints, descriptors
 
 
-def init_section_features(sections, source, detection_params=None, show_stats=True, out_filename=None):
+def init_section_features(sections, show_stats=True, out_filename=None, **params):
     if len(sections) > 0:
         for section in tqdm(sections):
-            section.init_features(source, detection_params=detection_params)
+            section.init_features(**params)
         sections_npoints = [min(len(section.points), len(section.points_alt)) for section in sections]
         mean_npoints = np.median(sections_npoints)
         for sectioni, npoints in enumerate(sections_npoints):
