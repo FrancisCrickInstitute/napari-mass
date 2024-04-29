@@ -434,6 +434,28 @@ def blur_image(image, sigma):
     return new_image
 
 
+def create_detection_image(source, pixel_size):
+    image = get_max_image_at_pixelsize(source, pixel_size)
+    contour_detection_image = norm_image_variance(grayscale_image(image))
+    threshold = np.quantile(contour_detection_image, 0.95)
+    if threshold is not None:
+        if threshold == 1:
+            contour_detection_image = float2int_image(contour_detection_image >= threshold)
+        else:
+            contour_detection_image = float2int_image(contour_detection_image > threshold)
+    else:
+        threshold, contour_detection_image = \
+            cv.threshold(float2int_image(contour_detection_image), 0, 255, cv.THRESH_OTSU)
+    real_pixel_size = source.get_pixel_size_micrometer()[:2] * get_image_size(source) / get_image_size(contour_detection_image)
+    return contour_detection_image, real_pixel_size
+
+
+def simple_detection_image(image):
+    threshold, detection_image = \
+        cv.threshold(float2int_image(grayscale_image(image)), 0, 255, cv.THRESH_OTSU)
+    return detection_image
+
+
 def fluor_detection_image(image):
     alpha = image[..., 3]
     values = image[np.where(alpha)]
@@ -880,6 +902,23 @@ def draw_point_sets(points1, points2, matches=None, title='', show=True):
     if show:
         plt.show()
     return plt
+
+
+def draw_image_points_overlay(image1, image2, points1, points2, draw_size=2,
+                              color1=[1, 0, 0], color2=[0, 0, 1], line_color=[1, 1, 1], text_color=[0.5, 0.5, 0.5]):
+    image = np.atleast_3d(image1) * color1 + np.atleast_3d(image2) * color2
+    image_center = np.flip(image.shape[:2]) / 2
+    color1 = np.clip(np.array(color1) + 0.5, 0, 1) * 255
+    color2 = np.clip(np.array(color2) + 0.5, 0, 1) * 255
+    text_color = (np.array(text_color) * 255).tolist()
+    line_color = (np.array(line_color) * 255).tolist()
+    draw_points_cv(image, np.array(points1) + image_center, color1, draw_size=draw_size)
+    draw_points_cv(image, np.array(points2) + image_center, color2, draw_size=draw_size)
+    lines = [(p1 + image_center, p2 + image_center) for p1, p2 in zip(points1, points2)]
+    draw_lines_cv(image, lines, line_color, draw_size=draw_size)
+    #label_positions = [np.mean(p2, 0) + image_center for p2 in zip(points1, points2)]
+    #draw_labels_cv(image, label_positions, text_color, draw_size=draw_size)
+    return image
 
 
 def draw_points_cv(image, points, color, draw_size=1):

@@ -26,7 +26,10 @@ def align_sections_metrics(source_section, target_section, matching_methods, min
 def get_section_alignment(source_section, target_section, matching_methods, min_match_rate=0.5, pixel_size=1, **params):
     h_coarse = create_transform(angle=-source_section.angle, create3x3=True)
     h_align, metrics = align_sections_metrics(source_section, target_section, matching_methods, min_match_rate, **params)
-    h_full = combine_transforms([h_coarse, h_align])
+    if h_align.ndim == 2:
+        h_full = combine_transforms([h_coarse, h_align])
+    else:
+        h_full = h_coarse
     center = source_section.center - get_transform_pre_offset(h_full) * pixel_size
     angle = -get_transform_angle(h_full)
     return center, angle, metrics
@@ -115,32 +118,38 @@ def align_sections_cpd(source_section, target_section, distance_factor=1,
 
 
 def align_sections_flow(source_section, target_section, lowe_ratio=None, **params):
-    # TODO: WIP, suggest removal
+    # usually called with: section (new), prev_section (reference)
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
-    source_image = source_section.image
-    #v, u = skimage.registration.optical_flow_ilk(source_image, target_section.image, radius=nn_distance)
-    v, u = skimage.registration.optical_flow_tvl1(target_section.image, source_image)
-    norm = np.sqrt(u ** 2 + v ** 2)
+    source_image = grayscale_image(source_section.image)
+    target_image = grayscale_image(target_section.image)
+    #v, u = skimage.registration.optical_flow_ilk(target_image, source_image, radius=nn_distance)
+    v, u = skimage.registration.optical_flow_tvl1(target_image, source_image)
+    v0, u0 = skimage.registration.optical_flow_tvl1(source_image, target_image)
 
     # Inverse coordinate map, which transforms coordinates in the output images
     # into their corresponding coordinates in the input image.
-    h, w = source_image.shape
+    h, w = source_image.shape[:2]
     y_coords, x_coords = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
     inverse_map = np.array([y_coords + v, x_coords + u])
 
-    # testing: overlay image
+    # debug: show original overlay
+    overlay_image = np.atleast_3d(target_image) * [1, 0, 0] + np.atleast_3d(source_image) * [0, 0, 1]
+    show_image(overlay_image)
+
+    # show transformed overlay
     source_image_warped = skimage.transform.warp(source_image, inverse_map, mode='edge', preserve_range=True).astype(source_image.dtype)
-    overlay_image = np.atleast_3d(target_section.image) * [1, 0, 0] + np.atleast_3d(source_image_warped) * [0, 0, 1]
+    overlay_image = np.atleast_3d(target_image) * [1, 0, 0] + np.atleast_3d(source_image_warped) * [0, 0, 1]
+    show_image(overlay_image)
 
     # testing: show magnitude and vector field
     nvec = 20  # Number of vectors to be displayed along each image dimension
-    nl, w = source_section.image.shape
-    step = max(nl // nvec, w // nvec)
+    step = max(h // nvec, w // nvec)
 
-    y, x = np.mgrid[:nl:step, :w:step]
+    y, x = np.mgrid[:h:step, :w:step]
     u_ = u[::step, ::step]
     v_ = v[::step, ::step]
 
+    norm = np.sqrt(u ** 2 + v ** 2)
     plt.imshow(norm)
     plt.quiver(x, y, u_, v_, color='r', units='dots', angles='xy', scale_units='xy', lw=3)
     plt.tight_layout()
@@ -150,14 +159,27 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     transform = inverse_map
     # apply transform to source points
     # TODO: fix calculation (apply inverse from inverse_map?)
-    transformed_source_points0 = []
+    transformed_source_points = []
     for point in source_section.points:
         index = tuple(np.round(point).astype(int).tolist())
-        tpoint = point + (u[index], v[index])
-        transformed_source_points0.append(tpoint)
-    transformed_source_points = [(point0, size_point[1])
-                                 for point0, size_point in zip(transformed_source_points0, source_section.size_points)]
-    metrics = get_match_metrics(target_section.size_points, transformed_source_points, nn_distance, lowe_ratio)
+        tpoint = point + (u0[index], v0[index])
+        transformed_source_points.append(tpoint)
+    transformed_source_size_points = \
+        [(point0, size_point[1]) for point0, size_point
+         in zip(transformed_source_points, source_section.size_points)]
+
+    # test point transform
+    show_image(draw_image_points_overlay(source_image, source_image_warped,
+                                         source_section.points, transformed_source_points))
+
+    metrics = get_match_metrics(target_section.size_points, transformed_source_size_points, nn_distance, lowe_ratio)
+    # alternative metrics for flow: image intersection / union
+    target_image_bin = (target_image != 0)
+    source_image_warped_bin = (source_image_warped != 0)
+    ntotal = np.sum(target_image_bin)
+    match_rate = np.sum(source_image_warped_bin & target_image_bin) / ntotal
+    metrics['match_rate'] = match_rate
+
     return transform, metrics
 
 

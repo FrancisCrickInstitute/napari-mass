@@ -23,7 +23,7 @@ import cv2 as cv
 import glob
 import logging
 from napari.layers.base import ActionType
-from napari_ome_zarr._reader import transform, napari_get_reader
+from napari_ome_zarr._reader import napari_get_reader
 import numpy as np
 import os.path
 from sklearn.metrics import euclidean_distances
@@ -38,7 +38,7 @@ from napari_mass.file.DataFile import DataFile
 from napari_mass.ExternalTspSolver import ExternalTspSolver
 from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics
 from napari_mass.Point import Point
-from napari_mass.section_detection import create_detection_image, detect_magsections, detect_nearest_edges
+from napari_mass.section_detection import detect_magsections, detect_nearest_edges
 from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
 from napari_mass.TiffTileSource import TiffTileSource
 from napari_mass.OmeZarrSource import OmeZarrSource
@@ -404,7 +404,7 @@ class DataModel:
             for index1, index2 in np.transpose(np.triu_indices(n, 1)):
                 section1, section2 = self.sections[index1], self.sections[index2]
                 metrics = align_sections_metrics(section2, section1, methods)[-1]
-                # TODO: store in matrix
+                # TODO: store in distance/score matrix
 
         prev_section = None
         for sectioni in order:
@@ -436,7 +436,8 @@ class DataModel:
                     matched_section_points = [match[0] for match in metrics['matched_points']]
                     matched_prev_section_points = [match[1] for match in metrics['matched_points']]
                     # visualise
-                    show_image(self.draw_image_points_overlay(section.image, prev_section.image, matched_section_points, matched_prev_section_points))
+                    show_image(draw_image_points_overlay(section.image, prev_section.image,
+                                                         matched_section_points, matched_prev_section_points))
 
             prev_section = section
         #self.data.save()
@@ -503,23 +504,6 @@ class DataModel:
         filename += '.tiff'
         save_image(join_path(self.outfolder, filename), out_image)
 
-    def draw_image_points_overlay(self, image1, image2, points1, points2, draw_size=2,
-                                  color1=[1, 0, 0], color2=[0, 0, 1], line_color=[1, 1, 1], text_color=[0.5, 0.5, 0.5]):
-        image = np.atleast_3d(image1) * color1 + np.atleast_3d(image2) * color2
-
-        image_center = np.flip(image.shape[:2]) / 2
-        color1 = np.clip(np.array(color1) + 0.5, 0, 1) * 255
-        color2 = np.clip(np.array(color2) + 0.5, 0, 1) * 255
-        text_color = (np.array(text_color) * 255).tolist()
-        line_color = (np.array(line_color) * 255).tolist()
-        draw_points_cv(image, points1 + image_center, color1, draw_size=draw_size)
-        draw_points_cv(image, points2 + image_center, color2, draw_size=draw_size)
-        lines = [(p1 + image_center, p2 + image_center) for p1, p2 in zip(points1, points2)]
-        draw_lines_cv(image, lines, line_color, draw_size=draw_size)
-        #label_positions = [np.mean(p2, 0) + image_center for p2 in zip(points1, points2)]
-        #draw_labels_cv(image, label_positions, text_color, draw_size=draw_size)
-        return image
-
 
 
 
@@ -585,9 +569,10 @@ class DataModel:
         confidences = []
         detection_params = self.params['mag_detection']
         min_match_rate = detection_params['min_match_rate']
+        pixel_size = detection_params['pixel_size']
         # mag section detection
         if self.automation and not self.magsections_finalised:
-            contour_detection_image, real_pixel_size = create_detection_image(self.fluor_source, detection_params)
+            contour_detection_image, real_pixel_size = create_detection_image(self.fluor_source, pixel_size)
             magsections, detect_confidences = detect_magsections(contour_detection_image, detection_params,
                                                                  real_pixel_size,
                                                                  outfolder=self.outfolder,

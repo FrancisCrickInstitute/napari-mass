@@ -54,11 +54,13 @@ class Section:
         if image_function:
             detection_image = image_function(rotated_image, size_range=size_range_px)
         else:
-            detection_image = grayscale_image(rotated_image[..., :3])
+            detection_image = simple_detection_image(rotated_image)
 
         self.image = detection_image
+        self.image_alpha = rotated_image[..., 3]
         if target_size is not None:
             self.image = reshape_image(self.image, target_size)
+            self.image_alpha = reshape_image(self.image_alpha, target_size)
         self.points, self.size_points, self.keypoints, self.descriptors = \
             get_image_features(detection_image, min_area, max_area)
 

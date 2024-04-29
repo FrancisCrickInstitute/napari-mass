@@ -6,23 +6,6 @@ from napari_mass.image.util import *
 from napari_mass.util import *
 
 
-def create_detection_image(source, params):
-    pixel_size = split_value_unit_list(params['pixel_size'])
-    image = get_max_image_at_pixelsize(source, pixel_size)
-    contour_detection_image = norm_image_variance(grayscale_image(image))
-    threshold = np.quantile(contour_detection_image, 0.95)
-    if threshold is not None:
-        if threshold == 1:
-            contour_detection_image = float2int_image(contour_detection_image >= threshold)
-        else:
-            contour_detection_image = float2int_image(contour_detection_image > threshold)
-    else:
-        threshold, contour_detection_image = \
-            cv.threshold(float2int_image(contour_detection_image), 0, 255, cv.THRESH_OTSU)
-    real_pixel_size = source.get_pixel_size_micrometer()[:2] * get_image_size(source) / get_image_size(contour_detection_image)
-    return contour_detection_image, real_pixel_size
-
-
 def detect_magsections(contour_detection_image, params, pixel_size_um=None, outfolder=None, show_stats=False):
     magsections = []
     if pixel_size_um is None:
