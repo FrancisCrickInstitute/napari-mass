@@ -386,7 +386,7 @@ class DataModel:
             return False
 
     def align_sections(self, layer_name, reorder=True):
-        methods = ['flow']
+        methods = ['cpd']
         distance_factor = 1
         detection_params = self.params.get(layer_name).copy()
         detection_params['min_npoints'] = 10
@@ -423,24 +423,24 @@ class DataModel:
                     element['angle'] = angle
 
                     # 2. re-init points
-                    section.init_features(self.source, pixel_size, target_size,
-                                          create_brightfield_detection_image,
-                                          detection_params)
-                    center, angle, metrics = get_section_alignment(section, prev_section, methods,
-                                                                   pixel_size=pixel_size, distance_factor=distance_factor,
-                                                                   w=0.001, max_iter=200, tol=0.1)
-                    print(f'match rate: {metrics["match_rate"]:.3f}',
-                          f'dcenter: {math.dist(section.center, center):.3f}',
-                          f'dangle: {get_angle_dif(section.angle, angle):.3f}')
+                    #section.init_features(self.source, pixel_size, target_size,
+                    #                      create_brightfield_detection_image,
+                    #                      detection_params)
+                    #center, angle, metrics = get_section_alignment(section, prev_section, methods,
+                    #                                               pixel_size=pixel_size, distance_factor=distance_factor,
+                    #                                               w=0.001, max_iter=200, tol=0.1)
+                    #print(f'match rate: {metrics["match_rate"]:.3f}',
+                    #      f'dcenter: {math.dist(section.center, center):.3f}',
+                    #      f'dangle: {get_angle_dif(section.angle, angle):.3f}')
                     # 3. store position map
-                    matched_section_points = [match[0] for match in metrics['matched_points']]
-                    matched_prev_section_points = [match[1] for match in metrics['matched_points']]
+                    #matched_section_points = [match[0] for match in metrics['matched_points']]
+                    #matched_prev_section_points = [match[1] for match in metrics['matched_points']]
                     # visualise
-                    show_image(draw_image_points_overlay(section.image, prev_section.image,
-                                                         matched_section_points, matched_prev_section_points))
+                    #show_image(draw_image_points_overlay(section.image, prev_section.image,
+                    #                                     matched_section_points, matched_prev_section_points))
 
             prev_section = section
-        #self.data.save()
+        self.data.save()
 
     def propagate_elements(self, element_name, ref_element_name='sample'):
         value_type = self.data.get_value_type(element_name)
