@@ -12,6 +12,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import *
 import yaml
 
+from napari_mass.DataModel import DataModel
 from napari_mass.PathControl import PathControl
 from napari_mass.ParamControl import ParamControl
 from napari_mass.QtViewerModelWrap import QtViewerModelWrap
@@ -36,10 +37,13 @@ class MassWidget(QSplitter):
         global widget
         widget = self
 
+        if not os.path.exists(PROJECT_TEMPLATE):
+            raise FileNotFoundError(PROJECT_TEMPLATE)
+
         self.project_set = False
         self.clear_controls()
         self.load_params(PROJECT_TEMPLATE)
-        self.create_model()
+        self.create_datamodel()
         self.main_viewer = napari_viewer
         self.copied_shape = None
         self.shape_copy_mode = False
@@ -63,26 +67,24 @@ class MassWidget(QSplitter):
         self.main_output_widget = self.create_output_widget()
         napari_viewer.window.add_dock_widget(self.main_output_widget, name='MASS', area='left')
 
-    def create_model(self):
-        print('creating model')
-        # TODO: try to move import to top - reason this work-around works is unclear
-        from napari_mass.DataModel import DataModel
-        self.model = DataModel(self.params)
-        print('model created')
+    def create_datamodel(self):
+        print('creating DataModel')
+        self.datamodel = DataModel(self.params)
+        print('DataModel created')
 
     def set_model_params(self):
-        self.model.set_params(self.params)
+        self.datamodel.set_params(self.params)
 
     def init_project(self):
-        if self.model.params_init_done:
-            self.model.init()
+        if self.datamodel.params_init_done:
+            self.datamodel.init()
             self.enable_tabs(tab_index=1)
             self.select_tab(1)
         else:
             QMessageBox.warning(self, 'MASS', 'MASS project needs to be selected first')
 
     def on_image_dropped(self, path):
-        if self.model.init_done:
+        if self.datamodel.init_done:
             self.all_widgets['input.source.filename'].setText(path)
             return self.init_layers()
         else:
@@ -91,7 +93,7 @@ class MassWidget(QSplitter):
 
     def init_layers(self):
         self.main_viewer.layers.clear()
-        layer_infos = self.model.init_layers()
+        layer_infos = self.datamodel.init_layers()
         if layer_infos:
             self.main_viewer.layers.selection.clear()
             self.main_viewer.layers.selection.events.changed.connect(self.on_layer_selection_changed)
@@ -360,18 +362,18 @@ class MassWidget(QSplitter):
     def on_layer_data_changed(self, event):
         layer_name = event.source.name
         #print(event.action, layer_name, event.data_indices, event.value)
-        refesh_data = self.model.section_data_changed(event.action, layer_name, event.data_indices, event.value)
+        refesh_data = self.datamodel.section_data_changed(event.action, layer_name, event.data_indices, event.value)
         if refesh_data:
-            layer_info = self.model.init_data_layer(layer_name)
+            layer_info = self.datamodel.init_data_layer(layer_name)
             self.main_viewer.layers.remove(layer_name)
             self.main_viewer.add_layer(Layer.create(*layer_info))
 
     def on_template_data_changed(self, event):
         layer_name = event.source.name
         #print(event.action, layer_name, event.data_indices, event.value)
-        refesh_data = self.model.template_data_changed(event.action, layer_name, event.data_indices, event.value)
+        refesh_data = self.datamodel.template_data_changed(event.action, layer_name, event.data_indices, event.value)
         if refesh_data:
-            layer_info = self.model.init_data_layer(layer_name, top_path=[DATA_TEMPLATE_KEY])
+            layer_info = self.datamodel.init_data_layer(layer_name, top_path=[DATA_TEMPLATE_KEY])
             self.template_viewer.layers.remove(layer_name)
             layer = self.template_viewer.add_layer(Layer.create(*layer_info))
             layer.events.data.connect(self.on_template_data_changed)
@@ -399,7 +401,7 @@ class MassWidget(QSplitter):
         if layer_infos:
             for layer_info in layer_infos:
                 if layer_info[-1] == 'image':
-                    windows = self.model.get_source_contrast_windows()
+                    windows = self.datamodel.get_source_contrast_windows()
                     layers = self.main_viewer.add_image(layer_info[0], **layer_info[1])
                     for layer, window in zip(ensure_list(layers), windows):
                         layer.contrast_limits = (window['min'], window['max'])
@@ -446,11 +448,11 @@ class MassWidget(QSplitter):
         layer.text = {'string': '{order}', 'size': 20}
 
     def update_section_order(self):
-        self.model.update_section_order(self.section_order)
+        self.datamodel.update_section_order(self.section_order)
         self.update_data_layers()
 
     def update_data_layers(self):
-        data_layers = self.model.init_data_layers()
+        data_layers = self.datamodel.init_data_layers()
         for layer_name, layer_info in data_layers.items():
             if layer_name in self.main_viewer.layers:
                 self.main_viewer.layers.remove(layer_name)
@@ -485,13 +487,13 @@ class MassWidget(QSplitter):
 
     def update_template_layers(self):
         layer_name = self.main_viewer.layers.selection.active.name
-        image_stack = np.array(self.model.get_section_images(layer_name))
-        layer_scale = self.model.get_output_scale()
+        image_stack = np.array(self.datamodel.get_section_images(layer_name))
+        layer_scale = self.datamodel.get_output_scale()
         if len(image_stack) > 0:
             self.template_viewer.add_image(image_stack, scale=layer_scale)
             self.template_viewer.dims.set_point(0, 0)  # set index to 0
-            self.model.init_sample_template()
-            layer_infos = self.model.init_data_layers([DATA_TEMPLATE_KEY])
+            self.datamodel.init_sample_template()
+            layer_infos = self.datamodel.init_data_layers([DATA_TEMPLATE_KEY])
             if layer_infos:
                 for layer_info in layer_infos.values():
                     layer = self.template_viewer.add_layer(Layer.create(*layer_info))
@@ -506,7 +508,7 @@ class MassWidget(QSplitter):
         valid_layers = ['magnet', 'sample']
         layer_name = self.main_viewer.layers.selection.active.name
         if layer_name in valid_layers:
-            self.model.align_sections(layer_name, reorder=False)
+            self.datamodel.align_sections(layer_name, reorder=False)
             self.update_template_layers()
             self.select_layer('rois')
         else:
@@ -516,17 +518,17 @@ class MassWidget(QSplitter):
         valid_layers = ['rois', 'focus']
         layer_name = self.main_viewer.layers.selection.active.name
         if layer_name in valid_layers:
-            if self.model.get_template_elements(layer_name):
-                self.model.propagate_elements(layer_name)
+            if self.datamodel.get_template_elements(layer_name):
+                self.datamodel.propagate_elements(layer_name)
                 self.update_data_layers()
         else:
             QMessageBox.warning(self, 'MASS', f'Invalid layer selected, valid layers: {valid_layers}')
 
     def on_export_main_image_clicked(self):
-        self.model.draw_output()
+        self.datamodel.draw_output()
 
     def on_export_template_image_clicked(self):
-        self.model.draw_output(top_path=[DATA_TEMPLATE_KEY])
+        self.datamodel.draw_output(top_path=[DATA_TEMPLATE_KEY])
 
 
 widget: MassWidget  # singleton; create once globally

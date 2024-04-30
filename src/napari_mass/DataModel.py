@@ -65,6 +65,7 @@ class DataModel:
         self.init_done = False
         self.debug = True
 
+        print('creating log file')
         log_filename = join_path(validate_out_folder(None, 'log'), 'mass.log')
         # replace millisecond comma with dot:
         log_format = '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s'
@@ -74,6 +75,7 @@ class DataModel:
                             force=True)   # parameter: encoding='utf-8' - requires logging >= 3.9
         for module in ['ome_zarr']:
             logging.getLogger(module).setLevel(logging.WARNING)
+        print('log file created')
         logging.info('Microscopy Array Section Setup logging started')
 
         self.data = DataFile()
