@@ -124,13 +124,16 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     target_image = grayscale_image(target_section.image)
     #v, u = skimage.registration.optical_flow_ilk(target_image, source_image, radius=nn_distance)
     v, u = skimage.registration.optical_flow_tvl1(target_image, source_image)
-    v0, u0 = skimage.registration.optical_flow_tvl1(source_image, target_image)
 
     # Inverse coordinate map, which transforms coordinates in the output images
     # into their corresponding coordinates in the input image.
-    h, w = source_image.shape[:2]
-    y_coords, x_coords = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
-    inverse_map = np.array([y_coords + v, x_coords + u])
+    inverse_map = calculate_flow_map((v, u))
+    # TODO: inter/extrapolate NAN values in matrix, or interpolate using closest 4 non-nan values
+    regular_map = calculate_inverse_flow_map(inverse_map)
+
+    # alternative approach: redo registration with swapped source/target
+    vi, ui = skimage.registration.optical_flow_tvl1(source_image, target_image)
+    regular_map1 = calculate_flow_map((vi, ui))
 
     # debug: show original overlay
     overlay_image = np.atleast_3d(target_image) * [1, 0, 0] + np.atleast_3d(source_image) * [0, 0, 1]
@@ -143,6 +146,7 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
 
     # testing: show magnitude and vector field
     nvec = 20  # Number of vectors to be displayed along each image dimension
+    h, w = source_image.shape[:2]
     step = max(h // nvec, w // nvec)
 
     y, x = np.mgrid[:h:step, :w:step]
@@ -158,11 +162,11 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     # get transform from registration
     transform = inverse_map
     # apply transform to source points
-    # TODO: fix calculation (apply inverse from inverse_map?)
+    # TODO: lookup in regular non-inverse map, using interpolation
     transformed_source_points = []
     for point in source_section.points:
         index = tuple(np.round(point).astype(int).tolist())
-        tpoint = point + (u0[index], v0[index])
+        tpoint = point + (u[index], v[index])
         transformed_source_points.append(tpoint)
     transformed_source_size_points = \
         [(point0, size_point[1]) for point0, size_point
@@ -179,7 +183,6 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     ntotal = np.sum(target_image_bin)
     match_rate = np.sum(source_image_warped_bin & target_image_bin) / ntotal
     metrics['match_rate'] = match_rate
-
     return transform, metrics
 
 

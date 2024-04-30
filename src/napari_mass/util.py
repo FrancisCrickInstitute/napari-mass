@@ -325,6 +325,42 @@ def get_angle_dif(angle1, angle2):
     return angle
 
 
+def calculate_flow_map0(flow):
+    v, u = flow
+    h, w = flow[0].shape
+    y_coords, x_coords = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
+    flow_map = np.array([y_coords + v, x_coords + u])
+    return flow_map
+
+
+def calculate_flow_map(flow):
+    flow_map = np.zeros_like(flow)
+    map_shape = flow[0].shape
+    for index, (positions1, flows1) in enumerate(zip(np.indices(map_shape), flow)):
+        flow_map[index] = positions1 + flows1
+    return flow_map
+
+
+def calculate_inverse_flow_map(map0):
+    # Map format: n matrices of (z*)y*x shape where n is #dimensions.
+    # Each matrix represent corresponding value for (z, )y, x
+    map1 = np.full(map0.shape, np.nan)
+    map_shape = map0[0].shape
+    dimension_range = range(len(map0))
+    indices = np.transpose(np.indices(map_shape)).reshape(-1, 2)
+    for index0 in indices:
+        index = tuple(index0)
+        position = [map0[dimension][index] for dimension in dimension_range]
+        position_rounded = np.round(position)
+        position_remained = position_rounded - np.array(position)
+        position_index = np.array(position_rounded).astype(int)
+        index_position = index + position_remained
+        if np.all(position_index >= 0) and np.all(position_index < map_shape):
+            for dimension in dimension_range:
+                map1[dimension][tuple(position_index)] = index_position[dimension]
+    return map1
+
+
 def calc_confidence(value, ref_values):
     confidence = 1 - np.mean(np.abs(value - np.mean(ref_values, 0)) / np.mean(ref_values, 0))
     #confidence = 1 - np.mean(np.abs(value - np.mean(ref_values, 0)) / (3 * np.std(ref_values, 0)))

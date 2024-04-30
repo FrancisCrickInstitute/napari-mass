@@ -17,6 +17,6 @@ if __name__ == '__main__':
     sections = [Section(sample) for sample in sample_data]
     target_size = get_section_sizes(sections, target_pixel_size)[1]
     init_section_features(sections, source=source, pixel_size=target_pixel_size, target_size=target_size,
-                          image_function=create_brightfield_detection_image)
+                          image_function=create_brightfield_detection_image, show_stats=False)
     transform, metrics = align_sections_metrics(sections[1], sections[0], matching_methods=['flow'])
     print('match_rate', metrics['match_rate'])
