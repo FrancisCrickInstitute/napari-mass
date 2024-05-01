@@ -341,6 +341,13 @@ def calculate_flow_map(flow):
     return flow_map
 
 
+def get_flow_map_position(position, flow_map):
+    # TODO: interpolate using 4 closest (non-NAN) points in map:
+    position_int = tuple(np.flip(np.round(position)).astype(int))
+    transformed_position = [flow[position_int] for flow in flow_map]
+    return np.flip(transformed_position)
+
+
 def calculate_inverse_flow_map(map0):
     # Map format: n matrices of (z*)y*x shape where n is #dimensions.
     # Each matrix represent corresponding value for (z, )y, x

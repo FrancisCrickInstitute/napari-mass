@@ -129,11 +129,11 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     # into their corresponding coordinates in the input image.
     inverse_map = calculate_flow_map((v, u))
     # TODO: inter/extrapolate NAN values in matrix, or interpolate using closest 4 non-nan values
-    regular_map = calculate_inverse_flow_map(inverse_map)
+    flow_map = calculate_inverse_flow_map(inverse_map)
 
     # alternative approach: redo registration with swapped source/target
     vi, ui = skimage.registration.optical_flow_tvl1(source_image, target_image)
-    regular_map1 = calculate_flow_map((vi, ui))
+    flow_map1 = calculate_flow_map((vi, ui))
 
     # debug: show original overlay
     overlay_image = np.atleast_3d(target_image) * [1, 0, 0] + np.atleast_3d(source_image) * [0, 0, 1]
@@ -162,12 +162,9 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     # get transform from registration
     transform = inverse_map
     # apply transform to source points
-    # TODO: lookup in regular non-inverse map, using interpolation
-    transformed_source_points = []
-    for point in source_section.points:
-        index = tuple(np.round(point).astype(int).tolist())
-        tpoint = point + (u[index], v[index])
-        transformed_source_points.append(tpoint)
+    center = w / 2, h / 2
+    transformed_source_points = [get_flow_map_position(point + center, flow_map1) - center
+                                 for point in source_section.points]
     transformed_source_size_points = \
         [(point0, size_point[1]) for point0, size_point
          in zip(transformed_source_points, source_section.size_points)]
@@ -176,13 +173,21 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     show_image(draw_image_points_overlay(source_image, source_image_warped,
                                          source_section.points, transformed_source_points))
 
-    metrics = get_match_metrics(target_section.size_points, transformed_source_size_points, nn_distance, lowe_ratio)
-    # alternative metrics for flow: image intersection / union
+    metrics = get_match_metrics(target_section.size_points, transformed_source_size_points,
+                                nn_distance, lowe_ratio)
+
+    matched_source_points = [transformed_source_points[s] for t, s in metrics['matches']]
+    matched_target_points = [target_section.points[t] for t, s in metrics['matches']]
+    show_image(draw_image_points_overlay(target_image, source_image_warped,
+                                         matched_target_points, matched_source_points))
+
+    # alternative match rate for flow: image intersection / union
     target_image_bin = (target_image != 0)
     source_image_warped_bin = (source_image_warped != 0)
     ntotal = np.sum(target_image_bin)
     match_rate = np.sum(source_image_warped_bin & target_image_bin) / ntotal
-    metrics['match_rate'] = match_rate
+    metrics['match_rate2'] = match_rate
+
     return transform, metrics
 
 

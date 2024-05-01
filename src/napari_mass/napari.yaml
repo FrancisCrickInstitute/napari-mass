@@ -6,6 +6,8 @@ visibility: hidden  # use 'hidden' to remove plugin from napari hub search resul
 
 categories: ["Annotation", "Segmentation", "Visualization"]
 
+#on_activate: napari_mass._widget:activate_plugin
+
 contributions:
   commands:
     - id: napari-mass.mass
@@ -14,6 +16,7 @@ contributions:
     - id: napari-mass.get_reader
       python_name: napari_mass._widget:get_reader
       title: Open data with Microscopy Array Section Setup
+
   readers:
     - command: napari-mass.get_reader
       accepts_directories: true

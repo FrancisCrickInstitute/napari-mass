@@ -12,12 +12,16 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import *
 import yaml
 
-from napari_mass.DataModel import DataModel
 from napari_mass.PathControl import PathControl
 from napari_mass.ParamControl import ParamControl
 from napari_mass.QtViewerModelWrap import QtViewerModelWrap
+from napari_mass.file.resources import get_project_template
 from napari_mass.util import *
 from napari_mass.parameters import *
+
+
+#def activate_plugin(plugin_context):
+#    pass
 
 
 def get_reader(path):
@@ -37,12 +41,12 @@ class MassWidget(QSplitter):
         global widget
         widget = self
 
-        if not os.path.exists(PROJECT_TEMPLATE):
-            raise FileNotFoundError(PROJECT_TEMPLATE)
+        self.params = get_project_template()
+        if not self.params:
+            raise FileNotFoundError('Project template not found')
 
         self.project_set = False
         self.clear_controls()
-        self.load_params(PROJECT_TEMPLATE)
         self.create_datamodel()
         self.main_viewer = napari_viewer
         self.copied_shape = None
@@ -69,6 +73,7 @@ class MassWidget(QSplitter):
 
     def create_datamodel(self):
         print('creating DataModel')
+        from napari_mass.DataModel import DataModel     # good plugin practice: delay heavy imports
         self.datamodel = DataModel(self.params)
         print('DataModel created')
 
@@ -110,10 +115,8 @@ class MassWidget(QSplitter):
         self.tab_index = 0
 
     def load_params(self, path):
-        print('loading template parameters')
         with open(path, 'r') as infile:
             self.params = yaml.load(infile, Loader=yaml.Loader)
-        print('template parameters loaded')
 
     def create_view_widget(self, viewer):
         widget = QWidget()
