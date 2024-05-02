@@ -36,7 +36,7 @@ from napari_mass.file.FileDict import FileDict
 from napari_mass.file.csv_file import csv_write
 from napari_mass.file.DataFile import DataFile
 from napari_mass.ExternalTspSolver import ExternalTspSolver
-from napari_mass.point_matching import get_match_metrics, get_section_alignment, align_sections_metrics
+from napari_mass.point_matching import get_match_metrics, do_section_alignment, get_section_alignment_metrics
 from napari_mass.Point import Point
 from napari_mass.section_detection import detect_magsections, detect_nearest_edges
 from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
@@ -388,49 +388,48 @@ class DataModel:
             return False
 
     def align_sections(self, layer_name, reorder=True):
-        methods = ['cpd']
         distance_factor = 1
         detection_params = self.params.get(layer_name).copy()
         detection_params['min_npoints'] = 10
+        min_match_rate = 0.1
         order = self.data.get_values('serial_order/order')
         n = len(order)
 
         pixel_size = self.output_pixel_size  # use reduced pixel size
-        target_size = get_section_sizes(self.sections, pixel_size)[1]
 
-        init_section_features(self.sections, source=self.source, pixel_size=pixel_size, target_size=target_size,
+        init_section_features(self.sections, source=self.source, pixel_size=pixel_size,
                               image_function=create_brightfield_detection_image,
                               detection_params=detection_params)
 
         if reorder:
             for index1, index2 in np.transpose(np.triu_indices(n, 1)):
                 section1, section2 = self.sections[index1], self.sections[index2]
-                metrics = align_sections_metrics(section2, section1, methods)[-1]
+                metrics = get_section_alignment_metrics(section2, section1, 'cpd')[-1]
                 # TODO: store in distance/score matrix
 
         prev_section = None
         for sectioni in order:
             section = self.sections[sectioni]
             if prev_section is not None:
-                center, angle, metrics = get_section_alignment(section, prev_section, methods,
-                                                               pixel_size=pixel_size, distance_factor=distance_factor,
-                                                               w=0.001, max_iter=200, tol=0.1)
+                transform, metrics = do_section_alignment(
+                    section, prev_section, method='cpd', min_match_rate=min_match_rate,
+                    pixel_size=pixel_size, distance_factor=distance_factor,
+                    w=0.001, max_iter=200, tol=0.1)
                 # TODO: transform has scale as well which is currently ignored
-                if metrics['match_rate'] > 0.1:
+                if metrics['match_rate'] > min_match_rate:
                     # 1. adjust section using fine alignment
-                    section.center = center
-                    section.angle = angle
                     element = self.data['sections'][sectioni][layer_name]
-                    element['center'] = center
-                    element['angle'] = angle
+                    element['center'] = section.center
+                    element['angle'] = section.angle
 
                     # 2. re-init points
-                    #section.init_features(self.source, pixel_size, target_size,
-                    #                      create_brightfield_detection_image,
-                    #                      detection_params)
-                    #center, angle, metrics = get_section_alignment(section, prev_section, methods,
-                    #                                               pixel_size=pixel_size, distance_factor=distance_factor,
-                    #                                               w=0.001, max_iter=200, tol=0.1)
+                    section.init_features(self.source, pixel_size,
+                                          create_brightfield_detection_image,
+                                          detection_params)
+                    flow_map, metrics2 = get_section_alignment_metrics(
+                        section, prev_section, 'flow',
+                        pixel_size=pixel_size, distance_factor=distance_factor,
+                        w=0.001, max_iter=200, tol=0.1)
                     #print(f'match rate: {metrics["match_rate"]:.3f}',
                     #      f'dcenter: {math.dist(section.center, center):.3f}',
                     #      f'dangle: {get_angle_dif(section.angle, angle):.3f}')
@@ -661,13 +660,9 @@ class DataModel:
         for sectioni in tqdm(self.order):
             section = self.sections[sectioni]['magnet']
             if prev_section is not None:
-                center, angle, metrics = \
-                    get_section_alignment(section, prev_section, self.matching_methods,
-                                          lowe_ratio=lowe_ratio, max_iter=max_iter, min_match_rate=min_match_rate)
-                if metrics['match_rate'] > min_match_rate:
-                    # adjust section angle / center
-                    section.center = center
-                    section.angle = angle
+                transforms, metrics = \
+                    do_section_alignment(section, prev_section, methods=self.matching_methods,
+                                         lowe_ratio=lowe_ratio, max_iter=max_iter, min_match_rate=min_match_rate)
                 section.init_features(self.fluor_hq_source, detection_params=detection_params)
             prev_section = section
         results = self.check_order(self.order)
@@ -882,8 +877,8 @@ class DataModel:
                     source_section = self.sections[i]['magnet']
                     target_section = self.sections[j]['magnet']
                     dtransform, metrics =\
-                        align_sections_metrics(source_section, target_section, self.matching_methods,
-                                               lowe_ratio=lowe_ratio, max_iter=max_iter, min_match_rate=min_match_rate)
+                        get_section_alignment_metrics(source_section, target_section, self.matching_methods,
+                                                      lowe_ratio=lowe_ratio, max_iter=max_iter, min_match_rate=min_match_rate)
                     # calculate full section to section transform
                     transform = combine_transforms([
                         create_transform(translate=-source_section.center),
@@ -948,7 +943,7 @@ class DataModel:
             section = self.sections[sectioni]['magnet']
             if prev_section is not None:
                 nn_distance = np.mean([prev_section.nn_distance, section.nn_distance])
-                metrics = get_match_metrics(prev_section.size_points, section.size_points, nn_distance, lowe_ratio=lowe_ratio)
+                metrics = get_match_metrics(section.size_points, prev_section.size_points, nn_distance, lowe_ratio=lowe_ratio)
                 match_rate = metrics['match_rate']
                 scores.append(match_rate)
                 distances.append(metrics['norm_distance'])

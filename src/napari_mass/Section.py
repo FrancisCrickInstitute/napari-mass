@@ -29,16 +29,22 @@ class Section:
             self.center = center
         if self.angle is None:
             self.angle = angle
+        self.image = None
 
     def get_size(self, pixel_size=1):
         lengths = np.divide(np.flip(self.lengths), pixel_size)
         return np.ceil(lengths).astype(int)
 
-    def init_features(self, source, pixel_size=None, target_size=None, image_function=None, detection_params=None):
+    def init_image(self, source, pixel_size=None):
         if pixel_size is None:
             pixel_size = source.get_pixel_size_micrometer()[:2]
-        image = self.extract_image(source, pixel_size)
-        rotated_image, rotated_image_alt = self.create_rotated_image(image, pixel_size)
+        if self.image is None:
+            self.image = self.extract_image(source, pixel_size)
+        self.image_pixel_size = pixel_size
+
+    def init_features(self, image_function=None, detection_params=None):
+        pixel_size = self.image_pixel_size
+        rotated_image, rotated_image_alt = self.create_rotated_image(self.image, pixel_size)
         if detection_params:
             slice_thickness = get_dict_value(detection_params, 'size_slice_thickness_um')
             size_range0 = deserialise(get_dict_value(detection_params, 'size_range_um'))
@@ -52,21 +58,15 @@ class Section:
             min_npoints = 1
 
         if image_function:
-            detection_image = image_function(rotated_image, size_range=size_range_px)
+            bin_image = image_function(rotated_image, size_range=size_range_px)
         else:
-            detection_image = simple_detection_image(rotated_image)
+            bin_image = simple_detection_image(rotated_image)
+        bin_image_alt = rotate_image(bin_image, 180)
 
-        self.image = detection_image
-        self.image_alpha = rotated_image[..., 3]
-        if target_size is not None:
-            self.image = reshape_image(self.image, target_size)
-            self.image_alpha = reshape_image(self.image_alpha, target_size)
         self.points, self.size_points, self.keypoints, self.descriptors = \
-            get_image_features(detection_image, min_area, max_area)
-
-        detection_image_alt = rotate_image(detection_image, 180)
+            get_image_features(bin_image, min_area, max_area)
         self.points_alt, self.size_points_alt, self.keypoints_alt, self.descriptors_alt = \
-            get_image_features(detection_image_alt, min_area, max_area)
+            get_image_features(bin_image_alt, min_area, max_area)
 
         #print(len(self.points))
         if len(self.points) < min_npoints:  # or len(self.points_alt) < min_npoints:
@@ -78,6 +78,9 @@ class Section:
             self.nn_distance = np.median(dist[:, 1])
         else:
             self.nn_distance = 1
+
+        self.bin_image = bin_image
+        self.bin_image_alt = bin_image_alt
 
     def extract_image(self, source, pixel_size):
         polygon = self.polygon / pixel_size
@@ -209,9 +212,10 @@ def get_image_features(image, min_area=1, max_area=None):
     return points, size_points, keypoints, descriptors
 
 
-def init_section_features(sections, show_stats=True, out_filename=None, **params):
+def init_section_features(sections, source, pixel_size, show_stats=True, out_filename=None, **params):
     if len(sections) > 0:
         for section in tqdm(sections):
+            section.init_image(source, pixel_size)
             section.init_features(**params)
         sections_npoints = [min(len(section.points), len(section.points_alt)) for section in sections]
         mean_npoints = np.median(sections_npoints)

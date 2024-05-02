@@ -906,6 +906,9 @@ def draw_point_sets(points1, points2, matches=None, title='', show=True):
 
 def draw_image_points_overlay(image1, image2, points1, points2, draw_size=1,
                               color1=[1, 0, 0], color2=[0, 0, 1], line_color=[1, 1, 1], text_color=[0.5, 0.5, 0.5]):
+    max_size = np.flip(np.max([image1.shape[:2], image2.shape[:2]], 0))
+    image1 = reshape_image(image1, max_size)
+    image2 = reshape_image(image2, max_size)
     image = np.atleast_3d(image1) * color1 + np.atleast_3d(image2) * color2
     image_center = np.flip(image.shape[:2]) / 2
     color1 = np.clip(np.array(color1) + 0.5, 0, 1) * 255

@@ -3,7 +3,7 @@ from napari_mass.TiffSource import TiffSource
 from napari_mass.file.DataFile import DataFile
 from napari_mass.image.util import *
 from napari_mass.parameters import *
-from napari_mass.point_matching import align_sections_metrics
+from napari_mass.point_matching import do_section_alignment
 
 
 if __name__ == '__main__':
@@ -14,9 +14,26 @@ if __name__ == '__main__':
     data_filename = folder + 'mass/data.mass.json'
     data = DataFile(data_filename)
     sample_data = data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])[:2]
-    sections = [Section(sample) for sample in sample_data]
-    target_size = get_section_sizes(sections, target_pixel_size)[1]
-    init_section_features(sections, source=source, pixel_size=target_pixel_size, target_size=target_size,
+    min_match_rate = 0.1
+
+    sections = [Section(sample) for sample in sample_data][:2]
+    source_section, target_section = sections[1], sections[0]
+    init_section_features(sections, source=source, pixel_size=target_pixel_size,
                           image_function=create_brightfield_detection_image, show_stats=False)
-    transform, metrics = align_sections_metrics(sections[1], sections[0], matching_methods=['flow'])
-    print('match_rate', metrics['match_rate'])
+
+    transform, metrics = do_section_alignment(source_section, target_section, method='cpd', min_match_rate=min_match_rate,
+                                              distance_factor=1, w=0.001, max_iter=200, tol=0.1)
+    print(metrics)
+    matched_source_points = [source_section.points[s] for s, t in metrics['matches']]
+    matched_target_points = [target_section.points[t] for s, t in metrics['matches']]
+    show_image(draw_image_points_overlay(target_section.bin_image, source_section.bin_image,
+                                         matched_target_points, matched_source_points))
+    # update features
+    source_section.init_features(image_function=create_brightfield_detection_image)
+
+    transform, metrics = do_section_alignment(source_section, target_section, method='flow', min_match_rate=min_match_rate)
+    matched_source_points = [source_section.points[s] for s, t in metrics['matches']]
+    matched_target_points = [target_section.points[t] for s, t in metrics['matches']]
+    show_image(draw_image_points_overlay(target_section.bin_image, source_section.bin_image,
+                                         matched_target_points, matched_source_points))
+    print(metrics)

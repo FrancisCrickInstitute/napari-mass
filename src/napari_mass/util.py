@@ -288,6 +288,10 @@ def get_transform_center(transform):
     return cx, cy
 
 
+def is_affine_transform(transform):
+    return transform.ndim == 2 and transform.shape[0] <= 3 and transform.shape[1] <= 3
+
+
 def get_rotated_rect(data, offset=(0, 0)):
     center = get_center(data, offset)
     size = get_lengths(data)
