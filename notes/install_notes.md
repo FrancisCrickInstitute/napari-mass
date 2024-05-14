@@ -12,6 +12,9 @@
     cd napari-mass
     pip install -e .
 
-
 Don’t include PySide2 or PyQt5 in your plugin’s dependencies!
 (https://napari.org/stable/plugins/best_practices.html)
+
+For probreg / open3d on Mac:
+
+    conda install cxx-compiler
