@@ -2,7 +2,7 @@
 # magicgui: https://forum.image.sc/t/magicgui-select-folder-instead-of-file/76378
 # multiple viewer: https://napari.org/stable/gallery/multiple_viewer_widget.html
 # https://forum.image.sc/t/how-to-maximize-this-custom-mulitple-view-grid/84400
-
+import logging
 
 import napari
 from napari.layers import Layer
@@ -41,6 +41,8 @@ class MassWidget(QSplitter):
         global widget
         widget = self
 
+        self.init_log()
+
         self.params = get_project_template()
         if not self.params:
             raise FileNotFoundError('Project template not found')
@@ -70,6 +72,20 @@ class MassWidget(QSplitter):
 
         self.main_output_widget = self.create_output_widget()
         napari_viewer.window.add_dock_widget(self.main_output_widget, name='MASS', area='left')
+
+    def init_log(self):
+        print('creating log file')
+        log_filename = join_path(validate_out_folder(None, 'log'), 'mass.log')
+        # replace millisecond comma with dot:
+        log_format = '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s'
+        datefmt = '%Y-%m-%d %H:%M:%S'
+        logging.basicConfig(level=logging.INFO, format=log_format, datefmt=datefmt,
+                            handlers=[logging.StreamHandler(), logging.FileHandler(log_filename, encoding='utf-8')],
+                            force=True)   # parameter: encoding='utf-8' - requires logging >= 3.9
+        for module in ['ome_zarr']:
+            logging.getLogger(module).setLevel(logging.WARNING)
+        print('log file created')
+        logging.info('Microscopy Array Section Setup logging started')
 
     def create_datamodel(self):
         print('creating DataModel')
@@ -262,7 +278,7 @@ class MassWidget(QSplitter):
             self.populate_template_button.setEnabled(True)
         if controls and 'all' in controls:
             self.populate_template_button.setEnabled(True)
-            self.align_template_button.setEnabled(True)
+            #self.align_template_button.setEnabled(True)
             self.propagate_template_button.setEnabled(True)
             self.export_template_image_button.setEnabled(True)
         elif not controls or controls == 'none':
@@ -504,6 +520,7 @@ class MassWidget(QSplitter):
                 main_layer = self.main_viewer.layers.selection.active
                 self.select_template_layer(main_layer.name)
                 self.enable_template_controls('all')
+                self.select_layer('rois')
             return True
         return False
 

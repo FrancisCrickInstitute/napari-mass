@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
 
-from napari_mass.point_matching import get_features
+#from napari_mass.point_matching import get_features
 from napari_mass.image.util import *
 from napari_mass.util import *
 
@@ -208,8 +208,9 @@ def get_image_features(image, min_area=1, max_area=None):
     size_points = [(point - center, 2 * area2radius(area)) for point, area in area_points]
     # convert area to diameter
     keypoints = [cv.KeyPoint(point[0], point[1], 2 * area2radius(area)) for point, area in area_points]
-    descriptors = get_features(image, keypoints)
-    return points, size_points, keypoints, descriptors
+    #descriptors = get_features(image, keypoints)
+    #return points, size_points, keypoints, descriptors
+    return points, size_points, keypoints
 
 
 def init_section_features(sections, source, pixel_size, show_stats=True, out_filename=None, **params):
