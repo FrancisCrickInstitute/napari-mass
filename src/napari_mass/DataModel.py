@@ -30,9 +30,8 @@ from tifffile import xml2dict
 from napari_mass.TiffSource import TiffSource
 from napari_mass.file.FileDict import FileDict
 from napari_mass.file.DataFile import DataFile
-#from napari_mass.point_matching import do_section_alignment, get_section_alignment_metrics
 from napari_mass.Point import Point
-from napari_mass.Section import Section, init_section_features, get_section_sizes, get_section_images
+from napari_mass.Section import Section, get_section_sizes, get_section_images
 from napari_mass.TiffTileSource import TiffTileSource
 from napari_mass.OmeZarrSource import OmeZarrSource
 from napari_mass.parameters import *
@@ -377,9 +376,9 @@ class DataModel:
     #
     #     pixel_size = self.output_pixel_size  # use reduced pixel size
     #
-    #     init_section_features(self.sections, source=self.source, pixel_size=pixel_size,
-    #                           image_function=create_brightfield_detection_image,
-    #                           detection_params=detection_params)
+    #     init_sections_features(self.sections, source=self.source, pixel_size=pixel_size,
+    #                            image_function=create_brightfield_detection_image,
+    #                            detection_params=detection_params)
     #
     #     if reorder:
     #         for index1, index2 in np.transpose(np.triu_indices(n, 1)):

@@ -5,8 +5,6 @@ from napari_mass.util import get_dict_value
 
 
 class PathControl:
-    FOLDER_PLACEHOLDER = '[this folder]'
-
     def __init__(self, template, path_widget, params, param_label, function=None):
         self.template = template
         self.path_widget = path_widget
@@ -37,7 +35,7 @@ class PathControl:
         if len(types) > 1:
             file_type = types[1]
             if file_type.startswith('image'):
-                filter += 'Images (*.tif *.tiff *.zarr);;'
+                filter += 'Images (*.tif *.tiff .zattrs);;'
                 default_ext = '.tif'
             elif file_type.endswith('massproject'):
                 filter += 'MASS project files (*.massproject.*);;'
@@ -67,35 +65,32 @@ class PathControl:
             result = QFileDialog.getExistingDirectory(
                 caption=caption, directory=value
             )
-            self.finish_result(result)
-        elif dialog_type == 'save':
+            self.process_result(result)
+        elif dialog_type in ['save', 'set']:
+            if dialog_type == 'set':
+                options = QFileDialog.DontConfirmOverwrite  # only works on Windows?
+            else:
+                options = None
             result = QFileDialog.getSaveFileName(
+                caption=caption, directory=value, filter=filter, options=options,
+            )
+            self.process_result(result[0])
+        else:
+            # open file
+            result = QFileDialog.getOpenFileName(
                 caption=caption, directory=value, filter=filter
             )
-            self.finish_result(result[0])
-        else:
-            if 'zarr' in filter:
-                value = os.path.join(value, self.FOLDER_PLACEHOLDER)
-            self.dialog = QFileDialog(caption=caption, directory=value, filter=filter)
-            self.dialog.accepted.connect(self.accept)
-            self.dialog.exec()
+            # filter zarr
+            filepath = result[0]
+            filename = os.path.basename(filepath)
+            if filename in ['.zattrs', '.zgroup']:
+                filepath = os.path.dirname(filepath)
+            self.process_result(filepath)
 
-    def accept(self):
-        files = self.dialog.selectedFiles()
-        if files:
-            filename = files[0]
-        else:
-            filename = None
-        if filename.endswith(self.FOLDER_PLACEHOLDER):
-            filename = filename.replace('[this folder]', '')
-            filename = filename.rstrip('/\\')
-            self.is_folder = True
-        self.finish_result(filename)
-
-    def finish_result(self, result):
-        if result:
-            if not self.is_folder and os.path.splitext(result)[1] == '':
-                result += self.default_ext
-            self.path_widget.setText(result)
+    def process_result(self, filepath):
+        if filepath:
+            if not self.is_folder and os.path.splitext(filepath)[1] == '':
+                filepath += self.default_ext
+            self.path_widget.setText(filepath)
             if self.function is not None:
-                self.function(result)
+                self.function(filepath)

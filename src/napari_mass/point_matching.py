@@ -8,13 +8,6 @@ from napari_mass.image.util import *
 from napari_mass.util import *
 
 
-def get_features(image, keypoints):
-    #feature_model = cv.ORB_create()
-    feature_model = cv.xfeatures2d.BriefDescriptorExtractor_create(bytes=64)
-    _, descriptors = feature_model.compute(float2int_image(image), keypoints)
-    return descriptors
-
-
 def do_section_alignment(source_section, target_section, method, min_match_rate=0.5, pixel_size=1, **params):
     transform, metrics = get_section_alignment_metrics(source_section, target_section, method, **params)
     if metrics['match_rate'] > min_match_rate and is_affine_transform(transform):

@@ -2,8 +2,8 @@
 # magicgui: https://forum.image.sc/t/magicgui-select-folder-instead-of-file/76378
 # multiple viewer: https://napari.org/stable/gallery/multiple_viewer_widget.html
 # https://forum.image.sc/t/how-to-maximize-this-custom-mulitple-view-grid/84400
-import logging
 
+import logging
 import napari
 from napari.layers import Layer
 from napari.components.viewer_model import ViewerModel

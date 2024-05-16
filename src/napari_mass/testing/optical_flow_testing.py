@@ -1,4 +1,5 @@
-from napari_mass.Section import Section, get_section_sizes, init_section_features
+from features import init_section_features, init_sections_features
+from napari_mass.Section import Section
 from napari_mass.TiffSource import TiffSource
 from napari_mass.file.DataFile import DataFile
 from napari_mass.image.util import *
@@ -18,8 +19,8 @@ if __name__ == '__main__':
 
     sections = [Section(sample) for sample in sample_data][:2]
     source_section, target_section = sections[1], sections[0]
-    init_section_features(sections, source=source, pixel_size=target_pixel_size,
-                          image_function=create_brightfield_detection_image, show_stats=False)
+    init_sections_features(sections, source=source, pixel_size=target_pixel_size,
+                           image_function=create_brightfield_detection_image, show_stats=False)
 
     transform, metrics = do_section_alignment(source_section, target_section, method='cpd', min_match_rate=min_match_rate,
                                               distance_factor=1, w=0.001, max_iter=200, tol=0.1)
@@ -29,7 +30,7 @@ if __name__ == '__main__':
     show_image(draw_image_points_overlay(target_section.bin_image, source_section.bin_image,
                                          matched_target_points, matched_source_points))
     # update features
-    source_section.init_features(image_function=create_brightfield_detection_image)
+    init_section_features(source_section, image_function=create_brightfield_detection_image)
 
     transform, metrics = do_section_alignment(source_section, target_section, method='flow', min_match_rate=min_match_rate)
     matched_source_points = [source_section.points[s] for s, t in metrics['matches']]
