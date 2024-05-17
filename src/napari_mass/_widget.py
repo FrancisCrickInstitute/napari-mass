@@ -308,9 +308,8 @@ class MassWidget(QSplitter):
 
     def select_template_layer(self, name):
         if self.template_viewer.layers:
-            for layer in self.template_viewer.layers:
-                if layer.name == name:
-                    self.template_viewer.layers.selection.active = layer
+            if name in self.template_viewer.layers:
+                self.template_viewer.layers.selection.active = self.template_viewer.layers[name]
 
     def on_layer_added(self, event):
         data_layer_names = get_dict_value(self.params, 'input.layers')
@@ -318,6 +317,16 @@ class MassWidget(QSplitter):
         if layer.name in data_layer_names:
             layer.events.data.connect(self.on_layer_data_changed)
             layer.events.mode.connect(self.on_layer_mode_changed)
+
+            layer.events.edge_width.connect(self.on_layer_property_changed)
+            if hasattr(layer.events, 'current_size'):
+                layer.events.current_size.connect(self.on_layer_property_changed)
+            if hasattr(layer.events, 'size'):
+                layer.events.size.connect(self.on_layer_property_changed)
+            layer.events.current_edge_color.connect(self.on_layer_property_changed)
+            layer.events.edge_color.connect(self.on_layer_property_changed)
+            layer.events.opacity.connect(self.on_layer_property_changed)
+
             @layer.mouse_drag_callbacks.append
             def click_drag(layer, event):
                 self.on_layer_pressed(layer, event)
@@ -371,13 +380,33 @@ class MassWidget(QSplitter):
 
     def on_layer_mode_changed(self, event):
         layer = event.source
-        name = layer.name
-        mode = layer.mode
+        layer_name = layer.name
         if self.template_viewer.layers:
-            for layer in self.template_viewer.layers:
-                if layer.name == name:
-                    self.select_template_layer(name)
-                    layer.mode = mode
+            if layer_name in self.template_viewer.layers:
+                template_layer = self.template_viewer.layers[layer_name]
+                self.select_template_layer(layer_name)
+                template_layer.mode = layer.mode
+
+    def on_layer_property_changed(self, event):
+        layer = event.source
+        layer_name = layer.name
+        event_type = event.type
+        if self.template_viewer.layers:
+            if layer_name in self.template_viewer.layers:
+                template_layer = self.template_viewer.layers[layer_name]
+                if event_type.endswith('edge_width'):
+                    width = layer.current_edge_width
+                    template_layer.current_edge_width = width
+                    template_layer.edge_width = [width] * len(template_layer.edge_width)
+                elif event_type == 'current_size':
+                    template_layer.current_size = layer.current_size
+                elif event_type == 'edge_color':
+                    color = layer.current_edge_color
+                    template_layer.current_edge_color = color
+                    template_layer.edge_color = [color] * len(template_layer.edge_color)
+                elif event_type == 'opacity':
+                    template_layer.opacity = layer.opacity
+                template_layer.refresh()
 
     def on_layer_data_changed(self, event):
         layer_name = event.source.name
@@ -396,6 +425,7 @@ class MassWidget(QSplitter):
             layer_info = self.datamodel.init_data_layer(layer_name, top_path=[DATA_TEMPLATE_KEY])
             self.template_viewer.layers.remove(layer_name)
             layer = self.template_viewer.add_layer(Layer.create(*layer_info))
+            layer.mode = self.main_viewer.layers.selection.active.mode
             layer.events.data.connect(self.on_template_data_changed)
 
     def save_params(self):

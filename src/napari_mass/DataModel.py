@@ -48,7 +48,7 @@ class DataModel:
         'landmark': 'blue'
     }
 
-    SHAPE_THICKNESS = 20
+    SHAPE_THICKNESS = 10
     POINT_SIZE = 50
 
     def __init__(self, params):
