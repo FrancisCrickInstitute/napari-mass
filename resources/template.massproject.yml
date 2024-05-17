@@ -7,21 +7,9 @@ project:
   initialise_project: {type: button, function: init_project}
 
 input:
-  layers: {value: 'magnet, sample, rois, focus, landmarks'}
-  source:
-    filename: {type: path.open.image}
-  bf:
-    filename: {type: path.open.image}
-    channel: {type: str}
-  fluor:
-    filename: {type: path.open.image}
-    channel: {type: str}
-  fluor_hq:
-    filename: {type: path.open.image}
-    metadata: {type: path.open.xml}
-    max_stitch_offset_um: {value: 50.0}
-    flatfield_filename: {type: path.open.image}
-    channel: {type: str}
+  layers: {value: 'sample, rois, focus, landmarks'}
+  source: {type: path.open.image}
+  source2: {type: path.open.image}
   initialise_layers: {type: button, function: create_layers}
 
 magnet:

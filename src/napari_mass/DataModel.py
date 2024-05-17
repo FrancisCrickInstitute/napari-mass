@@ -119,57 +119,65 @@ class DataModel:
                                     get_dict_value(output_params, 'pixel_size', '2um')))
 
         # main image
-        input_filename = get_dict_value(input_params, 'source.filename')
-        if input_filename is None or input_filename == '':
+        source_filenames = []
+        source_filename = get_dict_value(input_params, 'source', '')
+        if source_filename:
+            source_filenames.append(source_filename)
+        source_filename = get_dict_value(input_params, 'source2', '')
+        if source_filename:
+            source_filenames.append(source_filename)
+
+        if len(source_filenames) == 0:
             logging.warning('Source not set')
             return []
 
-        self.source = get_source(base_folder, input_filename)
-        source = self.source
-        if source:
-            self.source_pixel_size = source.get_pixel_size_micrometer()
-            self.small_image = source.render(self.source.asarray(pixel_size=self.output_pixel_size))
+        sources = []
 
-        # hq fluor image
-        hq_params = input_params.get('fluor_hq')
-        filename = get_dict_value(hq_params, 'filename')
-        if filename:
-            tile_path = join_path(base_folder, filename)
-            channel = get_dict_value(hq_params, 'channel', '')
-            tile_filenames = glob.glob(tile_path)
-            flatfield_filename = join_path(base_folder, get_dict_value(hq_params, 'flatfield_filename'))
-            stitching_filename = join_path(self.outfolder, 'stitching.json')
-            composition_metadata_xml = open(join_path(base_folder, get_dict_value(hq_params, 'metadata')), encoding='utf8').read()
-            composition_metadata = xml2dict(composition_metadata_xml)['ExportDocument']['Image']
-            self.fluor_hq_source = TiffTileSource(tile_filenames, composition_metadata,
-                                                  max_stitch_offset_um=get_dict_value(hq_params, 'max_stitch_offset_um'),
-                                                  stitching_filename=stitching_filename,
-                                                  channel=channel,
-                                                  flatfield_filename=flatfield_filename)
-            s = f'HQ Fluor source: {tile_path}'
-            if channel != '':
-                s += f' channel: {channel}'
-            logging.info(s)
-        else:
-            self.fluor_hq_source = source
+        channel_names = []
+        scales = []
+        blendings = []
+        contrast_limits = []
+        contrast_limits_range = []
+        colormaps = []
+        visibles = []
 
-        # set image layers
-        if source:
+        small_image = None
+
+        image_layers = []
+
+        for source_filename in source_filenames:
+            source = get_source(base_folder, source_filename)
+            source_pixel_size = source.get_pixel_size_micrometer()
+            if len(source_pixel_size) == 0:
+                source_pixel_size = [1, 1]
+            sources.append(source)
+            self.source_pixel_size = source_pixel_size
+            source_rendered = source.render(source.asarray(pixel_size=self.output_pixel_size))
+            if small_image is None:
+                small_image = source_rendered
+            elif source_rendered.shape == small_image.shape:
+                dtype = small_image.dtype
+                small_image = ((small_image + source_rendered) / 2).astype(dtype)
+            else:
+                logging.error('Image shapes do not match')
+
+            if 'c' in source.dimension_order and not source.is_rgb:
+                # channels_axis appears to be incompatible with RGB channels
+                c_index = source.dimension_order.index('c')
+            else:
+                c_index = None
+
+            # set image layers
             if isinstance(source, OmeZarrSource):
-                path = join_path(base_folder, input_filename)
+                path = join_path(base_folder, source_filename)
                 reader = napari_get_reader(path)
-                image_layers = reader(path)
+                image_layers.extend(reader(path))
             else:
                 data = source.get_source_dask()
-                source_pixel_size = source.get_pixel_size_micrometer()[:2]
+                source_pixel_size = source_pixel_size[:2]
                 channels = source.get_channels()
                 nchannels = len(channels)
-                channel_names = []
-                scales = []
-                blendings = []
-                contrast_limits = []
-                contrast_limits_range = []
-                colormaps = []
+
                 for channeli, channel in enumerate(channels):
                     channel_name = channel.get('label')
                     if not channel_name:
@@ -177,6 +185,7 @@ class DataModel:
                         if nchannels > 1:
                             channel_name += f' #{channeli}'
                     blending_mode = 'additive'
+                    visible = True
                     channel_color = channel.get('color')
                     if channel_color:
                         channel_color = tuple(channel_color)
@@ -190,6 +199,7 @@ class DataModel:
                         contrast_limits_range.append(window_range)
                         colormaps.append(channel.get('color'))
                         scales.append(source_pixel_size)
+                        visibles.append(visible)
                     else:
                         channel_names = channel_name
                         blendings = blending_mode
@@ -197,19 +207,21 @@ class DataModel:
                         contrast_limits_range = window_range
                         colormaps = channel_color
                         scales = source_pixel_size
+                        visibles = visible
 
-                if 'c' in source.dimension_order:
-                    c_index = source.dimension_order.index('c')
-                else:
-                    c_index = None
                 source_metadata = {'name': channel_names,
                                    'blending': blendings,
                                    'scale': scales,
                                    'contrast_limits': contrast_limits,
                                    #'contrast_limits_range': contrast_limits_range,     # not supported as parameter
                                    'colormap': colormaps,
-                                   'channel_axis': c_index}
+                                   'channel_axis': c_index,
+                                   'visible': visibles,
+                                   'metadata': source.metadata}
                 image_layers.append((data, source_metadata, 'image'))
+
+        self.source = sources[0]
+        self.small_image = small_image
         return image_layers
 
     def get_source_contrast_windows(self):

@@ -5,7 +5,7 @@ import dask.array as da
 from enum import Enum
 import numpy as np
 import os
-from tifffile import TiffFile, TiffPage
+from tifffile import TiffFile, TiffPage, PHOTOMETRIC
 
 from napari_mass.OmeSource import OmeSource
 from napari_mass.image.util import *
@@ -33,6 +33,8 @@ class TiffSource(OmeSource):
         super().__init__()
         self.data = bytes()
         self.arrays = []
+        photometric = None
+        nchannels = 1
 
         tiff = TiffFile(filename)
         self.tiff = tiff
@@ -55,7 +57,9 @@ class TiffSource(OmeSource):
             self.metadata.update(metadata)
 
         if tiff.series:
-            self.dimension_order = tiff.series[0].axes
+            series0 = tiff.series[0]
+            self.dimension_order = series0.axes
+            photometric = series0.keyframe.photometric
         self.pages = get_tiff_pages(tiff)
         for page0 in self.pages:
             npages = len(page0)
@@ -66,6 +70,7 @@ class TiffSource(OmeSource):
                 page = page0
             if not self.dimension_order:
                 self.dimension_order = page.axes
+                photometric = page.photometric
             shape = page.shape
             nchannels = shape[2] if len(shape) > 2 else 1
             nt = 1
@@ -95,6 +100,8 @@ class TiffSource(OmeSource):
 
         self.fh = tiff.filehandle
         self.dimension_order = self.dimension_order.lower().replace('s', 'c')
+
+        self.is_rgb = (photometric == PHOTOMETRIC.RGB and nchannels in (3, 4))
 
         self._init_metadata(filename,
                             source_pixel_size=source_pixel_size,

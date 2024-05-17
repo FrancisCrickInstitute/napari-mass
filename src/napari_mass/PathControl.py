@@ -14,7 +14,7 @@ class PathControl:
         self.path_type = template['type']
         icon = path_widget.style().standardIcon(QStyle.SP_FileIcon)
         path_button = QPushButton(icon, '')
-        path_button.clicked.connect(self.show_dialog)
+        path_button.clicked.connect(lambda: self.show_dialog(None))
         self.path_buttons = [path_button]
         if 'image' in self.path_type:
             icon = path_widget.style().standardIcon(QStyle.SP_DirIcon)
