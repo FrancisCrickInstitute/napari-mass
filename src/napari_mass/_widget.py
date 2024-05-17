@@ -258,7 +258,8 @@ class MassWidget(QSplitter):
 
             if value_type is not None and value_type.startswith('path'):
                 path_control = PathControl(template, var_widget, self.params, param_label, function=function)
-                layout.addWidget(path_control.get_button_widget(), i, 2)
+                for button_index, button in enumerate(path_control.get_button_widgets()):
+                    layout.addWidget(button, i, 2 + button_index)
                 self.path_controls[param_label] = path_control
 
             if 'edit' in template and not template['edit']:

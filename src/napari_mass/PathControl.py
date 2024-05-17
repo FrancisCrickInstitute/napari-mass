@@ -1,5 +1,5 @@
 import os
-from PyQt5.QtWidgets import QPushButton, QFileDialog
+from qtpy.QtWidgets import QPushButton, QFileDialog, QStyle
 
 from napari_mass.util import get_dict_value
 
@@ -12,19 +12,27 @@ class PathControl:
         self.param_label = param_label
         self.function = function
         self.path_type = template['type']
-        self.path_button = QPushButton('...')
-        self.path_button.clicked.connect(self.show_dialog)
+        icon = path_widget.style().standardIcon(QStyle.SP_FileIcon)
+        path_button = QPushButton(icon, '')
+        path_button.clicked.connect(self.show_dialog)
+        self.path_buttons = [path_button]
+        if 'image' in self.path_type:
+            icon = path_widget.style().standardIcon(QStyle.SP_DirIcon)
+            dir_button = QPushButton(icon, '')
+            dir_button.clicked.connect(lambda: self.show_dialog('dir'))
+            self.path_buttons.append(dir_button)
 
-    def get_button_widget(self):
-        return self.path_button
+    def get_button_widgets(self):
+        return self.path_buttons
 
-    def show_dialog(self):
+    def show_dialog(self, dialog_type=None):
         value = self.path_widget.text()
         value0 = get_dict_value(self.params, self.param_label)
         if not value and value0:
             value = value0
         types = self.path_type.split('.')[1:]
-        dialog_type = types[0].lower()
+        if dialog_type is None:
+            dialog_type = types[0].lower()
         caption = self.template.get('tip')
 
         if caption is None:
@@ -80,7 +88,7 @@ class PathControl:
             result = QFileDialog.getOpenFileName(
                 caption=caption, directory=value, filter=filter
             )
-            # filter zarr
+            # for zarr take parent path
             filepath = result[0]
             filename = os.path.basename(filepath)
             if filename in ['.zattrs', '.zgroup']:
