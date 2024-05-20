@@ -475,7 +475,8 @@ def get_dict_permissive(dct, name):
 def get_dict_value(dct, label, default=None, separator='.'):
     value = dct
     for sublabel in label.split(separator):
-        value = value.get(sublabel)
+        if isinstance(value, dict):
+            value = value.get(sublabel)
     if isinstance(value, dict):
         value = value.get('value')
     if value is None:
@@ -490,6 +491,16 @@ def get_dict_path(dct, path, default=None, separator='/'):
     if value is None:
         value = default
     return value
+
+
+def copy_dict_values(template, params):
+    for label, template_section in template.items():
+        if 'value' in template_section:
+            params[label] = template_section['value']
+        elif isinstance(template_section, dict) and 'function' not in template_section:
+            if label not in params:
+                params[label] = {}
+            copy_dict_values(template_section, params[label])
 
 
 def tags_to_dict(tags):

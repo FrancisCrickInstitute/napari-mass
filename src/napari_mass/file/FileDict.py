@@ -1,5 +1,5 @@
 import json
-import os
+import os.path
 import yaml
 
 from napari_mass.util import *

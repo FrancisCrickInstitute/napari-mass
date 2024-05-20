@@ -7,7 +7,7 @@ import logging
 import napari
 from napari.layers import Layer
 from napari.components.viewer_model import ViewerModel
-import os
+import os.path
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import *
 import yaml
@@ -43,9 +43,10 @@ class MassWidget(QSplitter):
 
         self.init_log()
 
-        self.params = get_project_template()
-        if not self.params:
+        self.template = get_project_template()
+        if not self.template:
             raise FileNotFoundError('Project template not found')
+        self.params = {}
 
         self.project_set = False
         self.clear_controls()
@@ -168,34 +169,38 @@ class MassWidget(QSplitter):
     def create_params_tab_widget(self):
         self.tab_names = []
         tab_widget = QTabWidget()
-        for label0, section_dict in self.params.items():
+        for label0, section_template in self.template.items():
             tip = None
             self.tab_names.append(label0)
             label = label0.replace('_', ' ').capitalize()
-            if 'label' in section_dict:
-                label = section_dict.pop('label')
-            if 'tip' in section_dict:
-                tip = section_dict.pop('tip')
+            if 'label' in section_template:
+                label = section_template.pop('label')
+            if 'tip' in section_template:
+                tip = section_template.pop('tip')
+            section_params = self.params.get(label0, {})
 
-            widget = self.create_params_widget(label0, section_dict)
+            widget = self.create_params_widget(label0, section_template, section_params)
             if tip is not None:
                 widget.settabText(tip)
             tab_widget.addTab(widget, label)
             tab_widget.currentChanged.connect(self.on_tab_selection_changed)
         return tab_widget
 
-    def create_params_widget(self, param_prefix, template_dict):
+    def create_params_widget(self, param_prefix, section_template, section_params):
         widget = QWidget()
         layout = QGridLayout()
         layout.setAlignment(Qt.AlignTop)
 
-        for i, (label0, template) in enumerate(template_dict.items()):
+        for i, (label0, template) in enumerate(section_template.items()):
+            params = section_params.get(label0, {})
             param_label = param_prefix + '.' + label0
             label = label0.replace('_', ' ').capitalize()
             if 'label' in template:
                 label = template['label']
 
-            value = template.get('value')
+            value = params
+            if value is None or isinstance(value, dict):
+                value = template.get('value')
 
             function = None
             if 'function' in template:
@@ -208,7 +213,7 @@ class MassWidget(QSplitter):
             elif 'value' in template:
                 value_type = type(template['value']).__name__.lower()
             elif isinstance(template, dict):
-                sub_items = self.create_params_widget(param_label, template)
+                sub_items = self.create_params_widget(param_label, template, params)
                 var_widget = QGroupBox()
                 var_widget.setLayout(sub_items.layout())
 
@@ -443,6 +448,9 @@ class MassWidget(QSplitter):
             self.replaceWidget(0, self.params_widget)
             self.enable_tabs(False, 1)
         else:
+            params_filename = get_dict_value(self.params, 'project.filename')
+            copy_dict_values(self.template, self.params)
+            self.params['project']['filename'] = params_filename
             self.save_params()
         self.set_model_params()
 

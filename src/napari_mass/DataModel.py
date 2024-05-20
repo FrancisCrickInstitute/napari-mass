@@ -19,21 +19,18 @@
 
 
 import cv2 as cv
-import glob
 import logging
 from napari.layers.base import ActionType
 from napari_ome_zarr._reader import napari_get_reader
 import numpy as np
 import os.path
-from tifffile import xml2dict
 
-from napari_mass.TiffSource import TiffSource
 from napari_mass.file.FileDict import FileDict
 from napari_mass.file.DataFile import DataFile
 from napari_mass.Point import Point
-from napari_mass.Section import Section, get_section_sizes, get_section_images
-from napari_mass.TiffTileSource import TiffTileSource
 from napari_mass.OmeZarrSource import OmeZarrSource
+from napari_mass.Section import Section, get_section_sizes, get_section_images
+from napari_mass.TiffSource import TiffSource
 from napari_mass.parameters import *
 from napari_mass.image.util import *
 from napari_mass.util import *
@@ -142,8 +139,6 @@ class DataModel:
         visibles = []
 
         small_image = None
-
-        image_layers = []
 
         for source_filename in source_filenames:
             source = get_source(base_folder, source_filename)

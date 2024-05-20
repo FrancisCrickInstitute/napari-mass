@@ -13,8 +13,11 @@ class ParamControl:
 
     def changed(self, value):
         params = self.params
-        for key in self.param_label.split('.'):
+        keys = self.param_label.split('.')
+        for key in keys[:-1]:
+            if key not in params:
+                params[key] = {}
             params = params[key]
-        params['value'] = value
+        params[keys[-1]] = value
         if self.param_label != 'project.filename':
             self.main_widget.save_params()
