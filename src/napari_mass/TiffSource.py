@@ -101,7 +101,7 @@ class TiffSource(OmeSource):
         self.fh = tiff.filehandle
         self.dimension_order = self.dimension_order.lower().replace('s', 'c')
 
-        self.is_rgb = (photometric == PHOTOMETRIC.RGB and nchannels in (3, 4))
+        self.is_rgb = (photometric in (PHOTOMETRIC.RGB, PHOTOMETRIC.PALETTE) and nchannels in (3, 4))
 
         self._init_metadata(filename,
                             source_pixel_size=source_pixel_size,
@@ -187,6 +187,7 @@ class TiffSource(OmeSource):
 
     def _asarray_level(self, level: int, **slicing) -> np.ndarray:
         self._load_as_dask()
-        slices = get_numpy_slicing(self.dimension_order, **slicing)
-        out = redimension_data(self.arrays[level][slices], self.dimension_order, self.get_dimension_order())
+        redim = redimension_data(self.arrays[level], self.dimension_order, self.get_dimension_order())
+        slices = get_numpy_slicing(self.get_dimension_order(), **slicing)
+        out = redim[slices]
         return out
