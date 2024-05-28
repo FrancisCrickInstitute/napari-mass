@@ -310,7 +310,8 @@ def float2int_image(image, target_dtype=np.dtype(np.uint8)):
         return image
 
 
-def uint8_image(image):
+def uint8_image(image0):
+    image = image0.copy()
     source_dtype = image.dtype
     if source_dtype.kind == 'f':
         image *= 255
