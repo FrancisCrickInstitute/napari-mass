@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import cv2 as cv
 import skimage
@@ -77,7 +78,10 @@ def align_points(source_size_points, target_size_points, source_descriptors, tar
         transformed_source_size_points = \
             [(point0, size_point[1]) for point0, size_point
              in zip(transformed_source_points, source_size_points)]
-        transformed_source_image = cv.warpPerspective(source_image, transform, np.flip(source_image.shape[:2]))
+        image_size = np.flip(source_image.shape[:2])
+        image_transform = combine_transforms(
+            [create_transform(translate=-image_size / 2), transform, create_transform(translate=image_size / 2)])
+        transformed_source_image = cv.warpPerspective(source_image, image_transform, image_size)
         metrics = get_match_metrics(transformed_source_size_points, target_size_points,
                                     transformed_source_image, target_image,
                                     nn_distance, lowe_ratio)
@@ -98,13 +102,16 @@ def align_sections_cpd(source_section, target_section, distance_factor=1,
     result_cpd = cpd.registration_cpd(source_section.points, target_section.points, w=w, maxiter=max_iter, tol=tol)
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance]) * distance_factor
     transformation = result_cpd.transformation
-    # transform() = scale * dot(points, rot.T) + t
+    # derived from: transform() = scale * dot(points, rot.T) + t
     transform = np.hstack([transformation.scale * transformation.rot, np.atleast_2d(transformation.t).T])
     transformed_source_points = transformation.transform(source_section.points)
     transformed_source_size_points = [(point0, size_point[1])
                                       for point0, size_point
                                       in zip(transformed_source_points, source_section.size_points)]
-    transformed_source_image = cv.warpAffine(source_section.bin_image, transform, np.flip(source_section.bin_image.shape[:2]))
+    image_size = np.flip(source_section.bin_image.shape[:2])
+    image_transform = combine_transforms(
+        [create_transform(translate=-image_size / 2), transform, create_transform(translate=image_size / 2)])
+    transformed_source_image = cv.warpPerspective(source_section.bin_image, image_transform, image_size)
     metrics = get_match_metrics(transformed_source_size_points, target_section.size_points,
                                 transformed_source_image, target_section.bin_image,
                                 nn_distance, lowe_ratio)
@@ -147,7 +154,7 @@ def align_sections_flow(source_section, target_section, lowe_ratio=None, **param
     norm = np.sqrt(u ** 2 + v ** 2)
     plt.imshow(norm)
     plt.quiver(x, y, u_, v_, color='r', units='dots', angles='xy', scale_units='xy', lw=3)
-    plt.tight_layout()
+    plt.savefig('vectors.tiff')
     plt.show()
 
     # get transform from registration
@@ -251,6 +258,18 @@ def get_match_metrics(points0, points1, image0, image1, nn_distance, lowe_ratio=
     metrics['matched_source_points'] = matched_source_points
     metrics['matched_target_points'] = matched_target_points
 
-    show_image(draw_image_points_overlay(image0, image1, matched_source_points, matched_target_points))
-
+    metrics['overlay_image'] = draw_image_points_overlay(image0, image1,
+                                                         matched_source_points, matched_target_points,
+                                                         draw_size=3)
     return metrics
+
+
+def print_metrics(metrics):
+    return (
+        f"#matches: {metrics['nmatches']} "
+        f"match rate: {metrics['match_rate']:.3f} "
+        f"size match rate: {metrics['size_match_rate']:.3f} "
+        f"image match rate: {metrics['image_match_rate']:.3f} "
+        f"distance: {metrics['distance']:.1f} "
+        f"norm distance: {metrics['norm_distance']:.1f} "
+    )

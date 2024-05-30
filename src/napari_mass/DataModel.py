@@ -538,7 +538,7 @@ def get_source(base_folder, input, input_filename=None):
         elif 'tif' in ext:
             source = TiffSource(filename, source_pixel_size=source_pixel_size, target_pixel_size=pixel_size)
         else:
-            source = cv_load(filename)
+            source = load_image(filename)
             if channel.isnumeric():
                 source = source[..., channel]
         s = f'Image source: {filename}'

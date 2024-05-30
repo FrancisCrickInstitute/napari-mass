@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter, gaussian_laplace, distance_transform_edt, label
+import imageio.v3 as imageio
 from skimage.feature import peak_local_max
 from skimage.filters import sobel
 from skimage.measure import regionprops
@@ -17,6 +18,7 @@ from napari_mass.util import *
 
 
 mpl.rcParams['figure.dpi'] = 600
+plt.rcParams['figure.constrained_layout.use'] = True
 
 confidence_color_map = mpl.colors.LinearSegmentedColormap.from_list('', [(1, 0, 0, 0.5), (1, 1, 0, 0.25), (0, 1, 0, 0)])
 
@@ -28,13 +30,7 @@ def show_image(image, title='', cmap=None):
     plt.imshow(image, cmap=cmap)
     if title != '':
         plt.title(title)
-    plt.tight_layout()
     plt.show()
-
-
-def show_image_cv(image):
-    cv.imshow('', image)
-    cv.waitKey()
 
 
 def ensure_unsigned_type(dtype: np.dtype) -> np.dtype:
@@ -200,21 +196,12 @@ def get_tiff_pages(tiff: TiffFile) -> list:
     return pages
 
 
-def cv_load(filename, grayscale=False):
-    # Note: seems to auto-convert 16-bit to 8-bit images
-    if grayscale:
-        return cv.imread(filename, flags=cv.IMREAD_GRAYSCALE)
-    else:
-        return cv.imread(filename)
+def load_image(filename, **params):
+    return imageio.imread(filename, **params)
 
 
-def save_image(filename, image, params=None):
-    if len(image.shape) > 2:
-        if image.shape[2] == 4:
-            image = cv.cvtColor(image, cv.COLOR_RGBA2BGRA)
-        else:
-            image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
-    cv.imwrite(filename, image, params)
+def save_image(filename, image, **params):
+    imageio.imwrite(filename, image, **params)
 
 
 def load_tiff(filename):
@@ -910,7 +897,7 @@ def draw_image_points_overlay(image1, image2, points1, points2, draw_size=1,
     max_size = np.flip(np.max([image1.shape[:2], image2.shape[:2]], 0))
     image1 = reshape_image(image1, max_size)
     image2 = reshape_image(image2, max_size)
-    image = np.atleast_3d(image1) * color1 + np.atleast_3d(image2) * color2
+    image = (np.atleast_3d(image1) * color1 + np.atleast_3d(image2) * color2).astype(image1.dtype)
     image_center = np.flip(image.shape[:2]) / 2
     color1 = np.clip(np.array(color1) + 0.5, 0, 1) * 255
     color2 = np.clip(np.array(color2) + 0.5, 0, 1) * 255
