@@ -690,7 +690,7 @@ def create_divided_image_masks_moments(contour, image_shape, nsections):
 
 def get_contours(binimage):
     #contours0 = cv.findContours(binimage, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)  # uses 8-connectivity
-    contours0 = cv.findContours(binimage, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)  # uses 8-connectivity
+    contours0 = cv.findContours(binimage, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)  # uses 8-connectivity
     contours = contours0[0] if len(contours0) == 2 else contours0[1]
     contours = list(contours)
     # reorder top y contours first:
@@ -820,12 +820,17 @@ def get_contour_mask(contour, image=None, shape=None, dtype=np.float32, color=No
     return mask
 
 
-def get_contour_points(binimage, min_area=1, max_area=None):
+def get_contour_points(binimage, area_range=None):
     contours = get_contours(binimage)
     area_contours = [(contour, cv.contourArea(contour)) for contour in contours[1:]]
-    area_contours.sort(key=lambda contour_area: contour_area[1], reverse=True)
+    if area_range is not None:
+        min_area, max_area = area_range
+    else:
+        areas = [area_contour[1] for area_contour in area_contours if area_contour[1] > 0]
+        min_area, max_area = np.quantile(areas, 0.5), np.quantile(areas, 0.99)
     area_points = [(get_center(contour), area) for contour, area in area_contours
                    if area >= min_area and (max_area is None or area <= max_area)]
+    area_points.sort(key=lambda area_points: area_points[1], reverse=True)
     return area_points
 
 

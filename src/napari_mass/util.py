@@ -25,7 +25,11 @@ def get_area(data):
 def area2radius(area):
     # A = pi * r^2
     # r = sqrt(A / pi)
-    return math.sqrt(area / math.pi)
+    return np.sqrt(area / np.pi)
+
+
+def diameter2area(size_range):
+    return np.pi * (size_range / 2) ** 2
 
 
 def get_shape_stats(data):
@@ -126,16 +130,14 @@ def convert_size_to_pixels(size_range, source_pixel_size):
     return np.divide(size_range, np.mean(source_pixel_size[:2]))
 
 
-def radius_to_area_range(size_range, slice_thickness, source_pixel_size):
+def estimate_bead_range(size_range, slice_thickness):
     r_min = size_range[0] / 2 * 0.75  # diameter -> radius with error margin
     if slice_thickness is not None:
-        min_detection_size_um = np.sqrt(r_min ** 2 - (r_min - slice_thickness) ** 2) * 2  # radius -> diameter
+        min_detection_size = np.sqrt(r_min ** 2 - (r_min - slice_thickness) ** 2) * 2  # radius -> diameter
     else:
-        min_detection_size_um = r_min * 2
-    max_detection_size_um = size_range[1] * 1.5  # +50% margin
-    min_detection_size, max_detection_size = np.array((min_detection_size_um, max_detection_size_um)) / source_pixel_size[:2]
-    min_area, max_area = np.pi * (np.array((min_detection_size, max_detection_size)) / 2) ** 2
-    return min_area, max_area
+        min_detection_size = r_min * 2
+    max_detection_size = size_range[1] * 1.5  # +50% margin
+    return min_detection_size, max_detection_size
 
 
 def scale_shape(data, scale):
@@ -350,6 +352,14 @@ def get_flow_map_position(position, flow_map):
     position_int = tuple(np.flip(np.round(position)).astype(int))
     transformed_position = [flow[position_int] for flow in flow_map]
     return np.flip(transformed_position)
+
+
+def get_sparse_flow_position(position, flow_sparse, tree):
+    distances0, indices0 = tree.query(position.reshape(1, -1), k=3)
+    indices = indices0[0]
+    dest_points = flow_sparse[1]
+    transformed_position = np.mean([dest_points[ind] for ind in indices], 0)    # interpolate?
+    return transformed_position
 
 
 def calculate_inverse_flow_map(map0):

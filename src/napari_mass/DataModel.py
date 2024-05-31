@@ -383,9 +383,14 @@ class DataModel:
     #
     #     pixel_size = self.output_pixel_size  # use reduced pixel size
     #
+    #     slice_thickness = get_dict_value(detection_params, 'size_slice_thickness_um')
+    #     size_range0 = deserialise(get_dict_value(detection_params, 'size_range_um'))
+    #     size_range = estimate_bead_range([float(x) for x in size_range0], slice_thickness)
+    #     min_npoints = get_dict_value(detection_params, 'min_npoints', 1)
+    #
     #     init_sections_features(self.sections, source=self.source, pixel_size=pixel_size,
     #                            image_function=create_brightfield_detection_image,
-    #                            detection_params=detection_params)
+    #                            size_range=size_range, min_npoints=min_npoints)
     #
     #     if reorder:
     #         for index1, index2 in np.transpose(np.triu_indices(n, 1)):
