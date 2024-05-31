@@ -214,13 +214,22 @@ def align_sections_sparse_flow(source_section, target_section, lowe_ratio=None, 
     transform = (source_section.points, transformed_source_points)
     tree = KDTree(source_section.points, leaf_size=2)
 
+
+    v, u = skimage.registration.optical_flow_tvl1(target_image, source_image)
+    inverse_map = calculate_flow_map((v, u))
+    # testing: comparing warped image
+    source_image_warped = (skimage.transform.warp(source_image, inverse_map, mode='edge', preserve_range=True)
+                           .astype(source_image.dtype))
+    show_image(source_image_warped)
+
+
     # use sparse map to convert image pixels
     source_image_warped = np.zeros_like(source_image)
-    # TODO: check for accidental x/y swapping
-    positions = np.transpose(np.where(source_image > 0))
+    positions = np.flip(np.transpose(np.where(source_image > 0)))   # correct to X,Y order
     values = source_image[positions]
     positions_warped = np.array([get_sparse_flow_position(point, transform, tree) for point in positions - center]) + center
     source_image_warped[positions_warped.astype(int).tolist()] = values
+    show_image(source_image_warped)
 
     metrics = get_match_metrics(transformed_source_size_points, target_section.size_points,
                                 source_image_warped, target_image,

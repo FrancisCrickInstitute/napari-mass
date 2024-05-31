@@ -356,9 +356,9 @@ def get_flow_map_position(position, flow_map):
 
 def get_sparse_flow_position(position, flow_sparse, tree):
     distances0, indices0 = tree.query(position.reshape(1, -1), k=3)
-    indices = indices0[0]
-    dest_points = flow_sparse[1]
-    transformed_position = np.mean([dest_points[ind] for ind in indices], 0)    # interpolate?
+    distances, indices = distances0[0], indices0[0]
+    source_points, dest_points = flow_sparse
+    transformed_position = np.sum([dest_points[ind] / dist for ind, dist in zip(indices, distances)], 0) / np.sum(1 / distances)
     return transformed_position
 
 
