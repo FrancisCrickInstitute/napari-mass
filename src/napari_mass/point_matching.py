@@ -4,7 +4,6 @@ import cv2 as cv
 import skimage
 from probreg import cpd
 from sklearn.metrics import euclidean_distances
-from sklearn.neighbors import KDTree
 
 from napari_mass.image.util import *
 from napari_mass.util import *
@@ -200,6 +199,10 @@ def align_sections_sparse_flow(source_section, target_section, lowe_ratio=None, 
 
     vi, ui = skimage.registration.optical_flow_tvl1(source_image, target_image)
     flow_map = calculate_flow_map((vi, ui))
+    sparse_flow_map = calculate_sparse_flow_map((vi, ui))
+
+    source_image_warped = transform_image_sparse_map(source_image, sparse_flow_map)
+    show_image(source_image_warped)
 
     # apply transform to source points
     h, w = source_image.shape[:2]
@@ -207,29 +210,20 @@ def align_sections_sparse_flow(source_section, target_section, lowe_ratio=None, 
     transformed_source_points = [get_flow_map_position(point + center, flow_map) - center
                                  for point in source_section.points]
 
+    transform = (source_section.points, transformed_source_points)
+
     transformed_source_size_points = \
         [(point0, size_point[1]) for point0, size_point
          in zip(transformed_source_points, source_section.size_points)]
 
-    transform = (source_section.points, transformed_source_points)
-    tree = KDTree(source_section.points, leaf_size=2)
 
-
-    v, u = skimage.registration.optical_flow_tvl1(target_image, source_image)
-    inverse_map = calculate_flow_map((v, u))
+    #v, u = skimage.registration.optical_flow_tvl1(target_image, source_image)
+    #inverse_map = calculate_flow_map((v, u))
     # testing: comparing warped image
-    source_image_warped = (skimage.transform.warp(source_image, inverse_map, mode='edge', preserve_range=True)
-                           .astype(source_image.dtype))
-    show_image(source_image_warped)
+    #source_image_warped = (skimage.transform.warp(source_image, inverse_map, mode='edge', preserve_range=True)
+    #                       .astype(source_image.dtype))
+    #show_image(source_image_warped)
 
-
-    # use sparse map to convert image pixels
-    source_image_warped = np.zeros_like(source_image)
-    positions = np.flip(np.transpose(np.where(source_image > 0)))   # correct to X,Y order
-    values = source_image[positions]
-    positions_warped = np.array([get_sparse_flow_position(point, transform, tree) for point in positions - center]) + center
-    source_image_warped[positions_warped.astype(int).tolist()] = values
-    show_image(source_image_warped)
 
     metrics = get_match_metrics(transformed_source_size_points, target_section.size_points,
                                 source_image_warped, target_image,

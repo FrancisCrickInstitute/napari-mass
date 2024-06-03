@@ -347,19 +347,79 @@ def calculate_flow_map(flow):
     return flow_map
 
 
+def calculate_sparse_flow_map(flow):
+    map_shape = flow[0].shape
+    source = np.moveaxis(np.indices(map_shape), 0, -1)
+    target = np.moveaxis(np.indices(map_shape) + flow, 0, -1)
+    return source, target
+
+
 def get_flow_map_position(position, flow_map):
-    # TODO: interpolate using 4 closest (non-NAN) points in map:
-    position_int = tuple(np.flip(np.round(position)).astype(int))
-    transformed_position = [flow[position_int] for flow in flow_map]
+    transformed_position = 0
+    position0 = np.asarray(position).astype(int)
+    tot_weight = 0
+    for y in range(2):
+        for x in range(2):
+            position1 = position0 + (x, y)
+            distance = math.dist(position, position1)
+            if distance == 0:
+                weight = 1000000
+            else:
+                weight = 1 / distance
+            transformed_position1 = np.array([flow[tuple(np.flip(position1))] for flow in flow_map])
+            transformed_position = transformed_position + transformed_position1 * weight
+            tot_weight += weight
+    transformed_position /= tot_weight
     return np.flip(transformed_position)
 
 
-def get_sparse_flow_position(position, flow_sparse, tree):
-    distances0, indices0 = tree.query(position.reshape(1, -1), k=3)
-    distances, indices = distances0[0], indices0[0]
-    source_points, dest_points = flow_sparse
-    transformed_position = np.sum([dest_points[ind] / dist for ind, dist in zip(indices, distances)], 0) / np.sum(1 / distances)
-    return transformed_position
+def transform_image_sparse_map(source, sparse_map):
+    source_positions = np.flip(np.reshape(sparse_map[0], (-1, 2)))
+    target_positions = np.flip(np.reshape(sparse_map[1], (-1, 2)))
+    h, w = source.shape[:2]
+    transformed_image = np.zeros_like(source)
+    for y in range(h):
+        for x in range(w):
+            position, value = get_sparse_flow_value((x, y), source, source_positions, target_positions)
+            transformed_image[y, x] = value
+    return transformed_image
+
+
+def get_sparse_flow_value(position, source, source_positions, target_positions):
+    transformed_position = 0
+    value = 0
+    maxn = 100
+
+    directions_done = set()
+    indices = []
+    n = 0
+    for index in np.argsort(np.linalg.norm(target_positions - position, axis=1)):
+        #distances0, indices0 = transform_tree.query([position], k=nn)
+        target_position = target_positions[index]
+        sign = tuple(np.sign(target_position - position))
+        if sign not in directions_done:
+            directions_done.add(sign)
+            indices.append(index)
+            if sign == (0, 0) or len(indices) >= 4:
+                break
+        n += 1
+        if n > maxn:
+            break
+
+    tot_weight = 0
+    for index in indices:
+        distance = math.dist(target_positions[index], position)
+        if distance == 0:
+            weight = 1000000
+        else:
+            weight = 1 / distance
+        position = source_positions[index]
+        transformed_position = transformed_position + position * weight
+        value += source[(position[1], position[0])] * weight
+        tot_weight += weight
+    transformed_position /= tot_weight
+    value /= tot_weight
+    return transformed_position, value
 
 
 def calculate_inverse_flow_map(map0):

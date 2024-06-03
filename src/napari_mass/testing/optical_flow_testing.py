@@ -44,7 +44,7 @@ if __name__ == '__main__':
     folder = 'D:/slides/EM04613/'
     source_filename = folder + 'EM04613_04_20x_WF_Reflection-02-Stitching-01.ome.tif'
     source = TiffSource(source_filename)
-    target_pixel_size = [1]
+    target_pixel_size = [4]
     data_filename = folder + 'mass/data.mass.json'
     data = DataFile(data_filename)
     sample_data = data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
