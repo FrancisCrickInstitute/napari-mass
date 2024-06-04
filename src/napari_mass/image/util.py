@@ -453,7 +453,7 @@ def fluor_detection_image(image):
     return detection_image
 
 
-def create_brightfield_detection_image(image, size_range):
+def create_brightfield_detection_image(image, pixel_size):
     detection_image = None
     alpha = image[..., 3]
     values = image[np.where(alpha)]
@@ -466,7 +466,7 @@ def create_brightfield_detection_image(image, size_range):
     positive_image[np.where(1 - alpha)] = 0
     int_image = float2int_image(positive_image)
     #_, detection_image = cv.threshold(int_image, 0, 255, cv.THRESH_OTSU)
-    blocksize = int(size_range[1]) * 4
+    blocksize = int(20 / np.mean(pixel_size))
     if blocksize % 2 == 0:
         blocksize += 1
     value_offset = 0
@@ -827,7 +827,10 @@ def get_contour_points(binimage, area_range=None):
         min_area, max_area = area_range
     else:
         areas = [area_contour[1] for area_contour in area_contours if area_contour[1] > 0]
-        min_area, max_area = np.quantile(areas, 0.5), np.quantile(areas, 0.99)
+        max_area = np.quantile(areas, 0.99)
+        min_area = np.mean(areas)
+        if min_area > max_area / 2:
+            min_area = np.median(areas)
     area_points = [(get_center(contour), area) for contour, area in area_contours
                    if area >= min_area and (max_area is None or area <= max_area)]
     area_points.sort(key=lambda area_points: area_points[1], reverse=True)

@@ -21,9 +21,7 @@ def init_section_features(section, image_function=None,
     area_range_px = diameter2area(size_range_px) if size_range_px is not None else None
 
     if image_function:
-        if size_range_px is None:
-            size_range_px = convert_size_to_pixels([1, 10], pixel_size)
-        bin_image = image_function(rotated_image, size_range=size_range_px)
+        bin_image = image_function(rotated_image, pixel_size=pixel_size)
     else:
         bin_image = simple_detection_image(rotated_image)
     bin_image_alt = rotate_image(bin_image, 180)

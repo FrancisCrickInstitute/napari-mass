@@ -24,9 +24,7 @@ def do_section_alignment(source_section, target_section, method, min_match_rate=
 
 def get_section_alignment_metrics(source_section, target_section, method, **params):
     method = method.lower()
-    if 'sparse_flow' in method:
-        results = align_sections_sparse_flow(source_section, target_section, **params)
-    elif 'flow' in method:
+    if 'flow' in method:
         results = align_sections_flow(source_section, target_section, **params)
     elif 'cpd' in method:
         results = align_sections_cpd(source_section, target_section, **params)
@@ -44,13 +42,13 @@ def align_sections_features(source_section, target_section, lowe_ratio=None, dis
         align_points_features(source_section.size_points, target_section.size_points,
                               source_section.descriptors, target_section.descriptors,
                               source_section.bin_image, target_section.bin_image,
-                              ransac_threshold, nn_distance, lowe_ratio)
+                              ransac_threshold, nn_distance, lowe_ratio, **params)
 
     transform2, metrics2 = \
         align_points_features(source_section.size_points, target_section.size_points_alt,
                               source_section.descriptors, target_section.descriptors_alt,
                               source_section.bin_image, target_section.bin_image_alt,
-                              ransac_threshold, nn_distance, lowe_ratio)
+                              ransac_threshold, nn_distance, lowe_ratio, **params)
 
     if metrics2['match_rate'] > metrics1['match_rate']:
         transform2 = rotate_transform_180(transform2)
@@ -62,7 +60,7 @@ def align_sections_features(source_section, target_section, lowe_ratio=None, dis
 def align_points_features(source_size_points, target_size_points,
                           source_descriptors, target_descriptors,
                           source_image, target_image,
-                          ransac_threshold, nn_distance, lowe_ratio):
+                          ransac_threshold, nn_distance, lowe_ratio, image_metrics=False):
     matcher = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
     cvmatches = matcher.match(source_descriptors, target_descriptors)
     source_points = [size_point[0] for size_point in source_size_points]
@@ -86,7 +84,10 @@ def align_points_features(source_size_points, target_size_points,
         image_size = np.flip(source_image.shape[:2])
         image_transform = combine_transforms(
             [create_transform(translate=-image_size / 2), transform, create_transform(translate=image_size / 2)])
-        transformed_source_image = cv.warpPerspective(source_image, image_transform, image_size)
+        if image_metrics:
+            transformed_source_image = cv.warpPerspective(source_image, image_transform, image_size)
+        else:
+            transformed_source_image = None
         metrics = get_match_metrics(transformed_source_size_points, target_size_points,
                                     transformed_source_image, target_image,
                                     nn_distance, lowe_ratio)
@@ -102,7 +103,7 @@ def align_points_features(source_size_points, target_size_points,
 
 
 def align_sections_cpd(source_section, target_section, distance_factor=1,
-                       lowe_ratio=None, w=0.00001, max_iter=100, tol=0.1):
+                       lowe_ratio=None, w=0.00001, max_iter=100, tol=0.1, image_metrics=False):
     # CPD: use_cuda doesn't seem to work (well) - might be a cupy (version) issue?
     result_cpd = cpd.registration_cpd(source_section.points, target_section.points, w=w, maxiter=max_iter, tol=tol)
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance]) * distance_factor
@@ -116,79 +117,17 @@ def align_sections_cpd(source_section, target_section, distance_factor=1,
     image_size = np.flip(source_section.bin_image.shape[:2])
     image_transform = combine_transforms(
         [create_transform(translate=-image_size / 2), transform, create_transform(translate=image_size / 2)])
-    transformed_source_image = cv.warpPerspective(source_section.bin_image, image_transform, image_size)
+    if image_metrics:
+        transformed_source_image = cv.warpPerspective(source_section.bin_image, image_transform, image_size)
+    else:
+        transformed_source_image = None
     metrics = get_match_metrics(transformed_source_size_points, target_section.size_points,
                                 transformed_source_image, target_section.bin_image,
                                 nn_distance, lowe_ratio)
     return transform, metrics
 
 
-def align_sections_flow(source_section, target_section, lowe_ratio=None, **params):
-    # usually called with: section (new), prev_section (reference)
-    nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
-    source_image = grayscale_image(source_section.bin_image)
-    target_image = grayscale_image(target_section.bin_image)
-    max_size = np.flip(np.max([source_image.shape[:2], target_image.shape[:2]], 0))
-    source_image = reshape_image(source_image, max_size)
-    target_image = reshape_image(target_image, max_size)
-    #v, u = skimage.registration.optical_flow_ilk(target_image, source_image, radius=nn_distance)
-    v, u = skimage.registration.optical_flow_tvl1(target_image, source_image)
-
-    # Inverse coordinate map, which transforms coordinates in the output images
-    # into their corresponding coordinates in the input image.
-    inverse_map = calculate_flow_map((v, u))
-    # TODO: inter/extrapolate NAN values in matrix, or interpolate using closest 4 non-nan values
-    #flow_map = calculate_inverse_flow_map(inverse_map)
-
-    vu = cv.calcOpticalFlowFarneback(target_image, source_image, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    vu_inv = cv.calcOpticalFlowFarneback(source_image, target_image, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-
-    # alternative approach: redo registration with swapped source/target
-    vi, ui = skimage.registration.optical_flow_tvl1(source_image, target_image)
-    flow_map = calculate_flow_map((vi, ui))
-
-    #flow_map1 = invert_displacement_vector_field(inverse_map, np.ones((1, 1)))
-
-    source_image_warped = (skimage.transform.warp(source_image, inverse_map, mode='edge', preserve_range=True)
-                           .astype(source_image.dtype))
-
-    # testing: show magnitude and vector field
-    nvec = 20  # Number of vectors to be displayed along each image dimension
-    h, w = source_image.shape[:2]
-    step = max(h // nvec, w // nvec)
-
-    y, x = np.mgrid[:h:step, :w:step]
-    u_ = u[::step, ::step]
-    v_ = v[::step, ::step]
-
-    norm = np.sqrt(u ** 2 + v ** 2)
-    plt.imshow(norm)
-    plt.quiver(x, y, u_, v_, color='r', units='dots', angles='xy', scale_units='xy', lw=3)
-    plt.savefig('vectors.tiff')
-    plt.show()
-
-    # get transform from registration
-    transform = flow_map
-    # apply transform to source points
-    center = w / 2, h / 2
-    transformed_source_points = [get_flow_map_position(point + center, flow_map) - center
-                                 for point in source_section.points]
-
-    #source_points = np.array(source_section.points).astype(np.float32)
-    #tran_source_points = np.zeros_like(source_points)
-    #points_reg = cv.calcOpticalFlowPyrLK(source_image, target_image, source_points, tran_source_points)
-
-    transformed_source_size_points = \
-        [(point0, size_point[1]) for point0, size_point
-         in zip(transformed_source_points, source_section.size_points)]
-
-    metrics = get_match_metrics(transformed_source_size_points, target_section.size_points,
-                                source_image_warped, target_image,
-                                nn_distance, lowe_ratio)
-    return transform, metrics
-
-
-def align_sections_sparse_flow(source_section, target_section, lowe_ratio=None, **params):
+def align_sections_flow(source_section, target_section, lowe_ratio=None, image_metrics=False):
     # usually called with: section (new), prev_section (reference)
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
     source_image = grayscale_image(source_section.bin_image)
@@ -201,12 +140,13 @@ def align_sections_sparse_flow(source_section, target_section, lowe_ratio=None, 
     flow_map = calculate_flow_map((vi, ui))
     sparse_flow_map = calculate_sparse_flow_map((vi, ui))
 
-    source_image_warped = transform_image_sparse_map(source_image, sparse_flow_map)
-    show_image(source_image_warped)
+    if image_metrics:
+        transformed_source_image = transform_image_sparse_map(source_image, sparse_flow_map)
+    else:
+        transformed_source_image = None
 
     # apply transform to source points
-    h, w = source_image.shape[:2]
-    center = w / 2, h / 2
+    center = np.flip(source_image.shape[:2]) / 2
     transformed_source_points = [get_flow_map_position(point + center, flow_map) - center
                                  for point in source_section.points]
 
@@ -216,17 +156,8 @@ def align_sections_sparse_flow(source_section, target_section, lowe_ratio=None, 
         [(point0, size_point[1]) for point0, size_point
          in zip(transformed_source_points, source_section.size_points)]
 
-
-    #v, u = skimage.registration.optical_flow_tvl1(target_image, source_image)
-    #inverse_map = calculate_flow_map((v, u))
-    # testing: comparing warped image
-    #source_image_warped = (skimage.transform.warp(source_image, inverse_map, mode='edge', preserve_range=True)
-    #                       .astype(source_image.dtype))
-    #show_image(source_image_warped)
-
-
     metrics = get_match_metrics(transformed_source_size_points, target_section.size_points,
-                                source_image_warped, target_image,
+                                transformed_source_image, target_image,
                                 nn_distance, lowe_ratio)
     return transform, metrics
 
@@ -304,7 +235,6 @@ def get_match_metrics(size_points0, size_points1, image0, image1, nn_distance, l
     metrics['nmatches'] = nmatches
     metrics['match_rate'] = nmatches / npoints if npoints > 0 else 0
     metrics['size_match_rate'] = weight / tot_weight
-    metrics['image_match_rate'] = image_match_rate
     distance = np.mean(matching_distances) if nmatches > 0 else np.inf
     metrics['distance'] = float(distance)
     metrics['norm_distance'] = float(distance / nn_distance)
@@ -313,18 +243,24 @@ def get_match_metrics(size_points0, size_points1, image0, image1, nn_distance, l
     metrics['matched_source_points'] = matched_source_points
     metrics['matched_target_points'] = matched_target_points
 
-    metrics['overlay_image'] = draw_image_points_overlay(image0, image1,
-                                                         matched_source_points, matched_target_points,
-                                                         draw_size=3)
+    if image_match_rate is not None:
+        metrics['image_match_rate'] = image_match_rate
+        metrics['overlay_image'] = draw_image_points_overlay(image0, image1,
+                                                             matched_source_points, matched_target_points,
+                                                             draw_size=3)
     return metrics
 
 
 def print_metrics(metrics):
+    if 'image_match_rate' in metrics:
+        image_match_rate = f"{metrics['image_match_rate']:.3f}"
+    else:
+        image_match_rate = ""
     return (
         f"#matches: {metrics['nmatches']} "
         f"match rate: {metrics['match_rate']:.3f} "
         f"size match rate: {metrics['size_match_rate']:.3f} "
-        f"image match rate: {metrics['image_match_rate']:.3f} "
+        f"image match rate: {image_match_rate} "
         f"distance: {metrics['distance']:.1f} "
         f"norm distance: {metrics['norm_distance']:.1f} "
     )

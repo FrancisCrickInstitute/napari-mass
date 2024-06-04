@@ -6,6 +6,7 @@ import numpy as np
 import os
 import re
 from scipy.stats import skew
+from sklearn.neighbors import KDTree
 
 
 def get_moments(data, offset=(0, 0)):
@@ -291,7 +292,8 @@ def get_transform_center(transform):
 
 
 def is_affine_transform(transform):
-    return transform.ndim == 2 and transform.shape[0] <= 3 and transform.shape[1] <= 3
+    return (isinstance(transform, np.ndarray) and
+            transform.ndim == 2 and transform.shape[0] <= 3 and transform.shape[1] <= 3)
 
 
 def get_rotated_rect(data, offset=(0, 0)):
@@ -373,14 +375,25 @@ def get_flow_map_position(position, flow_map):
     return np.flip(transformed_position)
 
 
-def transform_image_sparse_map(source, sparse_map):
+def transform_image_sparse_map(source, sparse_map, precise=False):
     source_positions = np.flip(np.reshape(sparse_map[0], (-1, 2)))
     target_positions = np.flip(np.reshape(sparse_map[1], (-1, 2)))
     h, w = source.shape[:2]
     transformed_image = np.zeros_like(source)
+
+    if not precise:
+        tree = KDTree(target_positions, leaf_size=2)
+
     for y in range(h):
         for x in range(w):
-            position, value = get_sparse_flow_value((x, y), source, source_positions, target_positions)
+            position = (x, y)
+            if precise:
+                source_position, value = get_sparse_flow_value(position, source, source_positions, target_positions)
+            else:
+                distances0, indices0 = tree.query([position], k=1)
+                index = indices0[0][0]
+                source_position = source_positions[index]
+                value = source[(source_position[1], source_position[0])]
             transformed_image[y, x] = value
     return transformed_image
 

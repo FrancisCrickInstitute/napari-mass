@@ -7,14 +7,14 @@ from napari_mass.parameters import *
 from napari_mass.point_matching import do_section_alignment, print_metrics, align_points_features
 
 
-def show_stats(metrics, method, source_section, target_section, output=True):
+def show_stats(metrics, method, source_section, target_section, image_output=True):
     print(print_metrics(metrics))
 
     matched_source_points = [source_section.points[s] for s, t in metrics['matches']]
     matched_target_points = [target_section.points[t] for s, t in metrics['matches']]
     matched_image = draw_image_points_overlay(target_section.bin_image, source_section.bin_image,
                                               matched_target_points, matched_source_points, draw_size=3)
-    if output:
+    if image_output:
         save_image(f'matched_{method}.tiff', matched_image)
         show_image(matched_image)
 
@@ -49,12 +49,11 @@ if __name__ == '__main__':
     data = DataFile(data_filename)
     sample_data = data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
     min_match_rate = 0.1
-    size_range = None
-    output = False
+    size_range = [10, 30]
+    image_output = False
 
     sections = [Section(sample) for sample in sample_data]
 
-    source_section, target_section = sections[1], sections[0]
     init_sections_features(sections, source=source, pixel_size=target_pixel_size,
                            image_function=create_brightfield_detection_image, size_range=size_range)
 
@@ -62,23 +61,29 @@ if __name__ == '__main__':
     # extract overall image
     # use this to flow align 'normal'? no...
 
-    # TODO: new alignment: use matched points as map / inverse map
-
     #image = get_overall_sections(sections, target_pixel_size)
     #show_image(image)
 
-    # course CPD alignment
-    method = 'cpd'
-    transform, metrics = do_section_alignment(source_section, target_section, method=method,
-                                              min_match_rate=min_match_rate,
-                                              distance_factor=1, w=0.001, max_iter=200, tol=0.1)
-    show_stats(metrics, method, source_section, target_section, output)
+    prev_section = None
+    for section in sections:
+        if prev_section is not None:
+            # course CPD alignment
+            method = 'cpd'
+            print(method, end=' ')
+            transform, metrics = do_section_alignment(section, prev_section, method=method,
+                                                      min_match_rate=min_match_rate,
+                                                      distance_factor=1, w=0.001, max_iter=200, tol=0.1)
+            show_stats(metrics, method, section, prev_section, image_output)
 
-    # update features
-    init_section_features(source_section, image_function=create_brightfield_detection_image, size_range=size_range)
+            # update features
+            init_section_features(section, image_function=create_brightfield_detection_image, size_range=size_range)
 
-    # fine optical flow alignment
-    method = 'sparse_flow'
-    transform, metrics = do_section_alignment(source_section, target_section, method=method,
-                                              min_match_rate=min_match_rate)
-    show_stats(metrics, method, source_section, target_section, output)
+            # fine optical flow alignment
+            method = 'flow'
+            print(method, end=' ')
+            transform, metrics = do_section_alignment(section, prev_section, method=method,
+                                                      min_match_rate=min_match_rate)
+            show_stats(metrics, method, section, prev_section, image_output)
+            print()
+
+        prev_section = section
