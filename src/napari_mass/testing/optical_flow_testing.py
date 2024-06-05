@@ -44,7 +44,7 @@ if __name__ == '__main__':
     folder = 'D:/slides/EM04613/'
     source_filename = folder + 'EM04613_04_20x_WF_Reflection-02-Stitching-01.ome.tif'
     source = TiffSource(source_filename)
-    target_pixel_size = [4]
+    target_pixel_size = [1]
     data_filename = folder + 'mass/data.mass.json'
     data = DataFile(data_filename)
     sample_data = data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
@@ -68,21 +68,22 @@ if __name__ == '__main__':
     for section in sections:
         if prev_section is not None:
             # course CPD alignment
-            method = 'cpd'
-            print(method, end=' ')
-            transform, metrics = do_section_alignment(section, prev_section, method=method,
-                                                      min_match_rate=min_match_rate,
-                                                      distance_factor=1, w=0.001, max_iter=200, tol=0.1)
-            show_stats(metrics, method, section, prev_section, image_output)
+            #method = 'cpd'
+            #print(method, end=' ')
+            #transform, metrics = do_section_alignment(section, prev_section, method=method,
+            #                                          min_match_rate=min_match_rate,
+            #                                          distance_factor=1, w=0.001, max_iter=200, tol=0.1)
+            #show_stats(metrics, method, section, prev_section, image_output)
 
             # update features
-            init_section_features(section, image_function=create_brightfield_detection_image, size_range=size_range)
+            #init_section_features(section, image_function=create_brightfield_detection_image, size_range=size_range)
 
             # fine optical flow alignment
             method = 'flow'
             print(method, end=' ')
             transform, metrics = do_section_alignment(section, prev_section, method=method,
-                                                      min_match_rate=min_match_rate)
+                                                      min_match_rate=min_match_rate,
+                                                      image_metrics=False)
             show_stats(metrics, method, section, prev_section, image_output)
             print()
 
