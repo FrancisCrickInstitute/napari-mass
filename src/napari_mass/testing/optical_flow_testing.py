@@ -1,4 +1,4 @@
-from features import init_section_features, init_sections_features, get_image_features
+from napari_mass.features import init_sections_features, get_image_features
 from napari_mass.Section import Section, get_section_sizes
 from napari_mass.TiffSource import TiffSource
 from napari_mass.file.DataFile import DataFile

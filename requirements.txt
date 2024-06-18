@@ -1,0 +1,8 @@
+numpy
+napari-ome-zarr
+dask
+scikit-learn
+scikit-image
+opencv-contrib-python
+tifffile
+matplotlib
