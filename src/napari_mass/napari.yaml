@@ -4,6 +4,7 @@ display_name: Microscopy Array Section Setup
 visibility: hidden  # use 'hidden' to remove plugin from napari hub search results
 #visibility: public
 
+# see https://napari.org/stable/plugins/manifest.html for valid categories
 categories: ["Annotation", "Segmentation", "Visualization"]
 
 #on_activate: napari_mass._widget:activate_plugin

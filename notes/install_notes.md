@@ -3,7 +3,7 @@
 ## Environment / prerequisites installation
 
 ### Creating napari conda environment
-    conda create -n napari-env python=3.9
+    conda create -n napari-env python=3.10
     conda activate napari-env
     conda install -c conda-forge pyqt napari
 

@@ -17,6 +17,7 @@ def get_project_template():
 
     # method 3: importlib.resources (new)
     project_template_res = importlib.resources.files('napari_mass')
+    print(project_template_res)
     resource_path = 'resources/'
     # if 'src' in path, move up first
     if 'src' in str(project_template_res):
@@ -24,6 +25,7 @@ def get_project_template():
         nback = len(paths) - paths.index('src')
         resource_path = '../' * nback + resource_path
     project_template_file_res = project_template_res.joinpath(resource_path + PROJECT_TEMPLATE)
+    print(project_template_file_res)
     file = project_template_file_res.read_text()
 
     # load file content
