@@ -46,11 +46,11 @@ class PathControl:
                 filter += 'Images (*.tif *.tiff .zattrs);;'
                 default_ext = '.tif'
             elif file_type.endswith('massproject'):
-                filter += 'MASS project files (*.massproject.*);;'
+                filter += 'MASS project files (*.massproject.yml);;'
                 if default_ext is None:
                     default_ext = '.massproject.yml'
             elif file_type.endswith('mass'):
-                filter += 'MASS project files (*.mass.*);;'
+                filter += 'MASS project files (*.mass.json);;'
                 if default_ext is None:
                     default_ext = '.mass.json'
             elif file_type.endswith('json'):
