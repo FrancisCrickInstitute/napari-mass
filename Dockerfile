@@ -1,6 +1,6 @@
 # https://napari.org/stable/howtos/docker.html
-FROM ghcr.io/napari/napari:0.4.19
-#FROM ghcr.io/napari/napari-xpra:0.4.19
+FROM ghcr.io/napari/napari:latest
+#FROM ghcr.io/napari/napari-xpra:latest
 
 COPY . napari-mass
 WORKDIR napari-mass
