@@ -31,7 +31,7 @@ dependencies = [
     "napari-ome-zarr",
     "dask",
     "scikit-learn",
-    "opencv-contrib-python",
+    "opencv-contrib-python-headless",
     "tifffile",
     "matplotlib",
 ]

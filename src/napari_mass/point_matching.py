@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2 as cv
-import skimage
-from probreg import cpd
 from sklearn.metrics import euclidean_distances
 
 from napari_mass.image.util import *
@@ -105,6 +103,7 @@ def align_points_features(source_size_points, target_size_points,
 def align_sections_cpd(source_section, target_section, distance_factor=1,
                        lowe_ratio=None, w=0.00001, max_iter=100, tol=0.1, image_metrics=False):
     # CPD: use_cuda doesn't seem to work (well) - might be a cupy (version) issue?
+    from probreg import cpd
     result_cpd = cpd.registration_cpd(source_section.points, target_section.points, w=w, maxiter=max_iter, tol=tol)
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance]) * distance_factor
     transformation = result_cpd.transformation
@@ -129,6 +128,7 @@ def align_sections_cpd(source_section, target_section, distance_factor=1,
 
 def align_sections_flow(source_section, target_section, lowe_ratio=None, image_metrics=False):
     # usually called with: section (new), prev_section (reference)
+    import skimage
     nn_distance = np.mean([source_section.nn_distance, target_section.nn_distance])
     source_image = grayscale_image(source_section.bin_image)
     target_image = grayscale_image(target_section.bin_image)

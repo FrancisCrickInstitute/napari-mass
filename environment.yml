@@ -20,4 +20,4 @@ dependencies:
  - tqdm
  - pip
  - pip:
-   - opencv-contrib-python
+   - opencv-contrib-python-headless

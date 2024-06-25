@@ -44,7 +44,7 @@ if __name__ == '__main__':
     folder = 'D:/slides/EM04613/'
     source_filename = folder + 'EM04613_04_20x_WF_Reflection-02-Stitching-01.ome.tif'
     source = TiffSource(source_filename)
-    target_pixel_size = [1]
+    target_pixel_size = [4]
     data_filename = folder + 'mass/data.mass.json'
     data = DataFile(data_filename)
     sample_data = data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
@@ -83,7 +83,7 @@ if __name__ == '__main__':
             print(method, end=' ')
             transform, metrics = do_section_alignment(section, prev_section, method=method,
                                                       min_match_rate=min_match_rate,
-                                                      image_metrics=False)
+                                                      image_metrics=True)
             show_stats(metrics, method, section, prev_section, image_output)
             print()
 
