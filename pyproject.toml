@@ -1,6 +1,6 @@
 [project]
 name = "napari-mass"
-dynamic = ["version"]
+dynamic = ["version", "dependencies"]
 description = "Microscopy Array Section Setup napari plugin"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -24,17 +24,10 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
 requires-python = ">=3.9"
-dependencies = [
-    "numpy",
-    "qtpy",
-    "scikit-image",
-    "napari-ome-zarr",
-    "dask",
-    "scikit-learn",
-    "opencv-contrib-python-headless",
-    "tifffile",
-    "matplotlib",
-]
+
+[tool.setuptools.dynamic]
+version = {attr = "napari_mass.__init__.__version__"}
+dependencies = {file = ["requirements.txt"]}
 
 [project.optional-dependencies]
 testing = [
@@ -68,9 +61,6 @@ where = ["src", "resources"]
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]
 
-
-[tool.setuptools.dynamic]
-version = {attr = "napari_mass.__init__.__version__"}
 
 [tool.black]
 line-length = 79

@@ -3,6 +3,6 @@ napari-ome-zarr
 dask
 scikit-learn
 scikit-image
-opencv-contrib-python
+opencv-contrib-python-headless
 tifffile
 matplotlib
