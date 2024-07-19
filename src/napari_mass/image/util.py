@@ -577,14 +577,15 @@ def color_label_image(image, label_image0):
 def reshape_image(image, target_size):
     # target_size: single value or [x, y]
     # create black border to avoid opencv padding lines
+    target_size = target_size.astype(int)
     image = cv.copyMakeBorder(image, 1, 1, 1, 1, cv.BORDER_CONSTANT, value=0)
     center = np.flip(image.shape[:2]) / 2
     if len(image.shape) == 3 and image.shape[2] == 4:
-        reshaped_image0 = cv.getRectSubPix(image[..., :3], np.int0(target_size), center)
-        reshaped_image_alpha = cv.getRectSubPix(image[..., 3], np.int0(target_size), center)
+        reshaped_image0 = cv.getRectSubPix(image[..., :3], target_size, center)
+        reshaped_image_alpha = cv.getRectSubPix(image[..., 3], target_size, center)
         reshaped_image = np.dstack([reshaped_image0, reshaped_image_alpha])
     else:
-        reshaped_image = cv.getRectSubPix(image, np.int0(target_size), center)
+        reshaped_image = cv.getRectSubPix(image, target_size, center)
     return reshaped_image
 
 
@@ -800,7 +801,7 @@ def test_detect_contour(contour0, image=None):
         print('ellipse:', rotated_ellipse)
 
         cv.ellipse(out_image, ellipse, color=(255, 0, 0), thickness=thickness)
-        #cv.ellipse(out_image, np.int0(center), np.int0(lengths) // 2, angle, 0, 360, color=(255, 0, 0))
+        #cv.ellipse(out_image, center.astype(int), (lengths / 2).astype(int), angle, 0, 360, color=(255, 0, 0))
 
     out_image = cv.addWeighted(back_image, 1, out_image, 0.8, gamma=0)
 

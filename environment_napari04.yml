@@ -1,4 +1,4 @@
-name: napari-mass-env
+name: napari04-mass-env
 channels:
  - conda-forge
  - bioconda
@@ -6,7 +6,7 @@ channels:
 dependencies:
  - python=3.10
  - pyqt
- - napari>=0.5
+ - napari<0.5
  - numpy
  - scipy
  - scikit-image

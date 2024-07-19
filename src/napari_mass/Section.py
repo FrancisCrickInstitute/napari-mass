@@ -130,7 +130,7 @@ class Section:
         image_center = get_image_size(out_image) / 2
         for label, size_point in zip(labels, size_points):
             center0, area = size_point
-            center = np.int0(center0 + image_center)
+            center = (center0 + image_center).astype(int)
             radius = math.sqrt(area / math.pi) * 2
             if point_color is None:
                 color = color_float_to_cv(colors[int(label) % len(colors)])

@@ -7,7 +7,19 @@
     conda activate napari-env
     conda install -c conda-forge pyqt napari
 
-### Installation of latest development version
+### Creating napari+ conda environment from file
+
+The napari environment including all the packages required for this plugin can be created by using
+the pre-defined environment.yml file:
+
+    conda env create -f environment.yml
+
+Note: On Windows machines ensure the environment is created in the current user folder rather than ProgramData.
+This can be forced using the prefix argument: 
+
+    conda env create --prefix=C:/Users/<user>/.conda/envs/napari-env -f environment.yml
+
+### Plugin installation of latest development version
     git clone git@github.com:FrancisCrickInstitute/napari-mass.git
     cd napari-mass
     pip install -e .
