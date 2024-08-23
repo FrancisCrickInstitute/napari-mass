@@ -24,6 +24,7 @@ from napari.layers.base import ActionType
 from napari_ome_zarr._reader import napari_get_reader
 import numpy as np
 import os.path
+from sklearn.metrics import euclidean_distances
 
 from napari_mass.file.FileDict import FileDict
 from napari_mass.file.DataFile import DataFile
@@ -334,11 +335,38 @@ class DataModel:
         if not sample:
             values = self.data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
             sections = [Section(value) for value in values]
-            element_size, large_size0 = get_section_sizes(sections)
-            padded_size_factor = 1
-            large_size = np.multiply(large_size0, padded_size_factor)
-            centre, size, rotation = (np.divide(large_size, 2), element_size.astype(float), 0)
-            sample = Section(cv.boxPoints((centre, size, rotation)))
+            # Point matching
+            template_points_all = []
+            points0 = None
+            for value_dict in values:
+                points = np.array(value_dict['polygon']) - value_dict['center']
+                h = create_transform(angle=-value_dict['angle'])
+                points = apply_transform(points, h)
+                if points0 is None:
+                    points0 = points
+                distance_matrix = euclidean_distances(points, points0)
+                match_indices = [int(np.argmin(distances)) for distances in distance_matrix]
+                if len(set(match_indices)) == len(points):
+                    sorted_points = points[match_indices]
+                    template_points_all.append(sorted_points)
+            template_points = np.mean(template_points_all, 0)
+            # determine center based on padding used for images
+            _, max_size = get_section_sizes(sections)
+            bounds = np.max(template_points, 0) - np.min(template_points, 0)
+            if not np.all(np.argsort(max_size) == np.argsort(bounds)):
+                # check for height / width swapped
+                max_size -= np.flip(max_size)
+            template_points += max_size / 2
+
+            if len(template_points) == 0:
+                # Rectangle approximation
+                element_size, large_size0 = get_section_sizes(sections)
+                padded_size_factor = 1
+                large_size = np.multiply(large_size0, padded_size_factor)
+                centre, size, rotation = (np.divide(large_size, 2), element_size.astype(float), 0)
+                template_points = cv.boxPoints((centre, size, rotation))
+
+            sample = Section(template_points)
             self.data.add_value([DATA_TEMPLATE_KEY, 'sample'], sample)
             self.data.save()
 
