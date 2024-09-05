@@ -545,7 +545,8 @@ def join_path(base_path, filename):
 
 def get_filetitle(filename: str) -> str:
     filebase = os.path.basename(filename)
-    return os.path.splitext(filebase)[0]
+    title = os.path.splitext(filebase)[0].rstrip('.ome')
+    return title
 
 
 def get_dict_permissive(dct, name):

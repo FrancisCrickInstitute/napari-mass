@@ -179,15 +179,16 @@ def get_thresholded_mean(image, threshold):
 def get_tiff_pages(tiff: TiffFile) -> list:
     pages = []
     found = False
-    for serie in tiff.series:
+    if tiff.series and not tiff.is_mmstack:
         # has series
-        for level in serie.levels:
+        baseline = tiff.series[0]
+        for level in baseline.levels:
             # has levels
             level_pages = []
             for page in level.pages:
                 found = True
                 level_pages.append(page)
-            if len(level_pages) > 0:
+            if level_pages:
                 pages.append(level_pages)
 
     if not found:
