@@ -3,9 +3,9 @@ import dask.array as da
 import logging
 import numpy as np
 
-from image.color_conversion import *
-from image.util import *
-from util import *
+from napari_mass.image.color_conversion import *
+from napari_mass.image.util import *
+from napari_mass.util import *
 
 
 class OmeSource:
