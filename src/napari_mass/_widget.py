@@ -345,7 +345,8 @@ class MassWidget(QSplitter):
 
     def on_layer_pressed(self, layer, event):
         if self.shape_copy_mode and layer.name == self.shape_copy_layer:
-            value = translate(self.copied_shape, event.position)
+            position = event.position[-2:]
+            value = translate(self.copied_shape, position)
             #if self.shape_snap_edges:
             #    value = np.flip(self.on_paste_function(np.flip(value)))
             layer.add(value)
