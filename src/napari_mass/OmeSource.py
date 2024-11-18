@@ -90,10 +90,15 @@ class OmeSource:
 
         position = []
         for plane in ensure_list(pixels.get('Plane', [])):
-            position = [(plane.get('PositionX'), plane.get('PositionXUnit')),
-                        (plane.get('PositionY'), plane.get('PositionYUnit')),
-                        (plane.get('PositionZ'), plane.get('PositionZUnit'))]
-            c, z, t = plane.get('TheC'), plane.get('TheZ'), plane.get('TheT')
+            position = []
+            if 'PositionX' in plane:
+                position.append((float(plane.get('PositionX')), plane.get('PositionXUnit')))
+            if 'PositionY' in plane:
+                position.append((float(plane.get('PositionY')), plane.get('PositionYUnit')))
+            if 'PositionZ' in plane:
+                position.append((float(plane.get('PositionZ')), plane.get('PositionZUnit')))
+            #c, z, t = plane.get('TheC'), plane.get('TheZ'), plane.get('TheT')
+            break
 
         self.position = position
         self.source_mag = 0

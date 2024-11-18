@@ -40,7 +40,8 @@ class Section:
         self.image_pixel_size = pixel_size
 
     def extract_image(self, source, pixel_size):
-        polygon = self.polygon / pixel_size
+        origin = get_value_units_micrometer(source.position[:2])
+        polygon = (self.polygon - origin) / pixel_size
         polygon_min, polygon_max = np.min(polygon, 0), np.max(polygon, 0)
 
         w, h = np.ceil(polygon_max - polygon_min).astype(int)

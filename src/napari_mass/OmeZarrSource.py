@@ -61,26 +61,31 @@ class OmeZarrSource(OmeSource):
 
     def _find_metadata(self):
         pixel_size = []
+        position = []
         channels = []
         metadata = self.metadata
         axes = self.dimension_order
 
         units = [axis.get('unit', '') for axis in metadata.get('axes', [])]
 
-        scale1 = [0, 0, 0, 0, 0]
+        scale1 = [1] * len(metadata.get('axes'))
+        position1 = [0] * len(metadata.get('axes'))
         # get pixelsize using largest/first scale
         transform = self.metadata.get('coordinateTransformations', [])
         if transform:
-            transform = transform[0]
-            for transform_element in transform:
-                if 'scale' in transform_element:
-                    scale1 = transform_element['scale']
+            for transform1 in transform[0]:
+                if transform1['type'] == 'scale':
+                    scale1 = transform1['scale']
+                if transform1['type'] == 'translation':
+                    position1 = transform1['translation']
             for axis in 'xyz':
                 if axis in axes:
                     index = axes.index(axis)
                     pixel_size.append((scale1[index], units[index]))
+                    position.append((position1[index], units[index]))
                 else:
                     pixel_size.append((1, ''))
+                    position.append((0, ''))
         nchannels = self.sizes_xyzct[0][3]
         # look for channel metadata
         for data in self.root_metadata.values():
@@ -95,13 +100,14 @@ class OmeZarrSource(OmeSource):
                             color = hexrgb_to_rgba(color)
                         channel['color'] = color
         if len(channels) == 0:
-            if nchannels == 3:
+            if self.is_rgb:
                 channels = [{'label': ''}]
             else:
                 channels = [{'label': ''}] * nchannels
         self.source_pixel_size = pixel_size
         self.channels = channels
         self.source_mag = 0
+        self.position = position
 
     def get_source_dask(self):
         return self.levels
