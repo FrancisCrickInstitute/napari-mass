@@ -36,7 +36,7 @@ def get_reader(path):
 
 
 class MassWidget(QSplitter):
-    def __init__(self, napari_viewer: napari.Viewer):
+    def __init__(self, napari_viewer: "napari.viewer.Viewer"):
         super().__init__()
         global widget
         widget = self
