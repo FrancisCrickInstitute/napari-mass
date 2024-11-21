@@ -133,6 +133,7 @@ class DataModel:
 
         channel_names = []
         scales = []
+        translations = []
         blendings = []
         contrast_limits = []
         contrast_limits_range = []
@@ -165,12 +166,15 @@ class DataModel:
 
             # set image layers
             if isinstance(source, OmeZarrSource):
+                # OME-Zarr
                 path = join_path(base_folder, source_filename)
                 reader = napari_get_reader(path)
                 image_layers.extend(reader(path))
             else:
+                # OME-Tiff or other
                 data = source.get_source_dask()
-                source_pixel_size = source_pixel_size[:2]
+                source_pixel_size = np.flip(source_pixel_size[:2]).tolist()
+                translation = np.flip(get_value_units_micrometer(source.position[:2])).tolist()
                 channels = source.get_channels()
                 nchannels = len(channels)
 
@@ -195,6 +199,7 @@ class DataModel:
                         contrast_limits_range.append(window_range)
                         colormaps.append(channel.get('color'))
                         scales.append(source_pixel_size)
+                        translations.append(translation)
                         visibles.append(visible)
                     else:
                         channel_names = channel_name
@@ -203,11 +208,13 @@ class DataModel:
                         contrast_limits_range = window_range
                         colormaps = channel_color
                         scales = source_pixel_size
+                        translations = translation
                         visibles = visible
 
                 source_metadata = {'name': channel_names,
                                    'blending': blendings,
                                    'scale': scales,
+                                   'translate': translations,
                                    'contrast_limits': contrast_limits,
                                    #'contrast_limits_range': contrast_limits_range,     # not supported as parameter
                                    'colormap': colormaps,
