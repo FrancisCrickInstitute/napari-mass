@@ -86,7 +86,7 @@ class MassWidget(QSplitter):
         for module in ['ome_zarr']:
             logging.getLogger(module).setLevel(logging.WARNING)
         print('log file created')
-        logging.info('Microscopy Array Section Setup logging started')
+        logging.info(f'Microscopy Array Section Setup {VERSION}')
 
     def create_datamodel(self):
         print('creating DataModel')

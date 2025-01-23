@@ -175,6 +175,8 @@ class DataModel:
                 data = source.get_source_dask()
                 source_pixel_size = np.flip(source_pixel_size[:2]).tolist()
                 translation = np.flip(get_value_units_micrometer(source.position[:2])).tolist()
+                if len(translation) == 0:
+                    translation = None
                 channels = source.get_channels()
                 nchannels = len(channels)
 
