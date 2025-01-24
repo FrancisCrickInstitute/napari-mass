@@ -12,6 +12,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import *
 import yaml
 
+from .__init__ import __version__ as VERSION
 from napari_mass.PathControl import PathControl
 from napari_mass.ParamControl import ParamControl
 from napari_mass.QtViewerModelWrap import QtViewerModelWrap

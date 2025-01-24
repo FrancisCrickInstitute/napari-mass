@@ -1,5 +1,4 @@
 NAME = 'MASS'
-VERSION = '0.6.2'
 
 PROJECT_TEMPLATE = 'template.massproject.yml'
 
