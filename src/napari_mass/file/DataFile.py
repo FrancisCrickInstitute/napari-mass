@@ -22,6 +22,7 @@ class DataFile(FileDict):
 
     def __init__(self, filename=None, load=True):
         super().__init__(filename, load)
+        from ..__init__ import __version__ as VERSION
         if self == {}:
             self[DATA_SOURCE_KEY] = NAME + ' ' + VERSION
             self[DATA_CREATED_KEY] = str(datetime.now())

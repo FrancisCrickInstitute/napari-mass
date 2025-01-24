@@ -75,6 +75,7 @@ class MassWidget(QSplitter):
         napari_viewer.window.add_dock_widget(self.main_output_widget, name='MASS', area='left')
 
     def init_log(self):
+        from .__init__ import __version__ as VERSION
         print('creating log file')
         log_filename = join_path(validate_out_folder(None, 'log'), 'mass.log')
         # replace millisecond comma with dot:
