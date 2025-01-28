@@ -9,5 +9,5 @@ viewer = Viewer()
 #dock_widget, plugin_widget = viewer.window.add_plugin_dock_widget('napari-mass', 'Microscopy Array Section Setup')
 #run()
 
-widget = MassWidget(viewer)
+#widget = MassWidget(viewer)
 viewer.show(block=True)
