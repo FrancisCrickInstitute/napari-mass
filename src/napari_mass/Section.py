@@ -40,7 +40,10 @@ class Section:
         self.image_pixel_size = pixel_size
 
     def extract_image(self, source, pixel_size):
-        origin = get_value_units_micrometer(source.position[:2])
+        origin = source.get_position_micrometer()[:2]
+        if len(origin) == 0:
+            origin = [0, 0]
+        # unit conversion: micrometers to pixels
         polygon = (self.polygon - origin) / pixel_size
         polygon_min, polygon_max = np.min(polygon, 0), np.max(polygon, 0)
 
@@ -171,9 +174,13 @@ def get_section_images(sections, source, pixel_size=None):
 
 
 def get_section_sizes(sections, pixel_size=None):
-    sizes = [section.get_size() for section in sections]
-    if pixel_size:
-        sizes = np.divide(sizes, pixel_size[:2])
-    mean_size = np.median(sizes, 0).astype(int)
-    padded_size = np.round(mean_size * 1.25).astype(int)
+    if len(sections) > 0:
+        sizes = [section.get_size() for section in sections]
+        if pixel_size:
+            sizes = np.divide(sizes, pixel_size[:2])
+        mean_size = np.median(sizes, 0).astype(int)
+        padded_size = np.round(mean_size * 1.25).astype(int)
+    else:
+        mean_size = [0, 0]
+        padded_size = [0, 0]
     return mean_size, padded_size

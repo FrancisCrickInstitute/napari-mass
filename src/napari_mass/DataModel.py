@@ -66,6 +66,7 @@ class DataModel:
         self.colors = create_color_table(1000)
         self.sections = []
         self.section_images = []
+        self.sample_changed = False
 
     def set_params(self, params):
         self.params = params
@@ -174,7 +175,7 @@ class DataModel:
                 # OME-Tiff or other
                 data = source.get_source_dask()
                 source_pixel_size = np.flip(source_pixel_size[:2]).tolist()
-                translation = np.flip(get_value_units_micrometer(source.position[:2])).tolist()
+                translation = np.flip(source.get_position_micrometer()[:2]).tolist()
                 if len(translation) == 0:
                     translation = None
                 channels = source.get_channels()
@@ -316,6 +317,8 @@ class DataModel:
                 if modified:
                     data_order_changed = True
         if modified:
+            if path[-1] == 'sample':
+                self.sample_changed = True
             self.data.save()
         return data_order_changed
 
@@ -341,7 +344,7 @@ class DataModel:
 
     def init_sample_template(self):
         sample = self.data.get_values([DATA_TEMPLATE_KEY, 'sample'])
-        if not sample:
+        if not sample or self.sample_changed:
             values = self.data.get_values([DATA_SECTIONS_KEY, '*', 'sample'])
             sections = [Section(value) for value in values]
             # Point matching
@@ -378,6 +381,7 @@ class DataModel:
             sample = Section(template_points)
             self.data.add_value([DATA_TEMPLATE_KEY, 'sample'], sample)
             self.data.save()
+            self.sample_changed = False
 
     def get_template_elements(self, element_name, ref_element_name='sample'):
         ref_element = self.data.get_values([DATA_TEMPLATE_KEY, ref_element_name])[0]

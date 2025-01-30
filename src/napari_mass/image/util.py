@@ -309,17 +309,6 @@ def uint8_image(image0):
     return image.astype(np.uint8)
 
 
-def norm_image_minmax(image0):
-    if len(image0.shape) == 3 and image0.shape[2] == 4:
-        image, alpha = image0[..., :3], image0[..., 3]
-    else:
-        image, alpha = image0, None
-    normimage = cv.normalize(np.array(image), None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F)
-    if alpha is not None:
-        normimage = np.dstack([normimage, alpha])
-    return normimage
-
-
 def redimension_data(data, old_order, new_order, **kwargs):
     # able to provide optional dimension values e.g. t=0, z=0
     if new_order == old_order:
@@ -369,6 +358,17 @@ def get_image_quantile(image: np.ndarray, quantile: float, axis=None) -> float:
 
 def normalise_values(image: np.ndarray, min_value: float, max_value: float) -> np.ndarray:
     return np.clip((image.astype(np.float32) - min_value) / (max_value - min_value), 0, 1)
+
+
+def norm_image_minmax(image0):
+    if len(image0.shape) == 3 and image0.shape[2] == 4:
+        image, alpha = image0[..., :3], image0[..., 3]
+    else:
+        image, alpha = image0, None
+    normimage = cv.normalize(np.array(image), None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F)
+    if alpha is not None:
+        normimage = np.dstack([normimage, alpha])
+    return normimage
 
 
 def norm_image_variance(image0):
