@@ -23,7 +23,9 @@ https://napari.org/stable/plugins/index.html
 
 ## Installation
 
-You can install `napari-mass` via [pip]:
+This plugin can be installed via the plugin manager inside napari. For more information on how to install plugins, please refer to the [napari plugin documentation](https://napari.org/stable/plugins/start_using_plugins/finding_and_installing_plugins.html).
+
+Alternatively, you can install `napari-mass` via [pip]:
 
     pip install napari-mass
 
