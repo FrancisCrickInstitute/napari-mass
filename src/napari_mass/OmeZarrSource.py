@@ -25,10 +25,16 @@ class OmeZarrSource(OmeSource):
         self.levels = []
         nchannels = 1
         try:
-            reader = Reader(parse_url(filename))
+            location = parse_url(filename)
+            if location is None:
+                raise FileNotFoundError(f'Error parsing ome-zarr file {filename}')
+            reader = Reader(location)
             # nodes may include images, labels etc
+            nodes = list(reader())
             # first node will be the image pixel data
-            image_node = list(reader())[0]
+            if len(nodes) == 0:
+                raise FileNotFoundError(f'No image data found in ome-zarr file {filename}')
+            image_node = nodes[0]
 
             self.metadata = image_node.metadata
             # channel metadata from ome-zarr-py limited; get from root_attrs manually
