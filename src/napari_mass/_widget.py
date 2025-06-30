@@ -324,13 +324,18 @@ class MassWidget(QSplitter):
             layer.events.data.connect(self.on_layer_data_changed)
             layer.events.mode.connect(self.on_layer_mode_changed)
 
-            layer.events.edge_width.connect(self.on_layer_property_changed)
+            if hasattr(layer.events, 'border_width'):
+                layer.events.border_width.connect(self.on_layer_property_changed)
+                layer.events.current_border_color.connect(self.on_layer_property_changed)
+                layer.events.border_color.connect(self.on_layer_property_changed)
+            elif hasattr(layer.events, 'edge_width'):
+                layer.events.edge_width.connect(self.on_layer_property_changed)
+                layer.events.current_edge_color.connect(self.on_layer_property_changed)
+                layer.events.edge_color.connect(self.on_layer_property_changed)
             if hasattr(layer.events, 'current_size'):
                 layer.events.current_size.connect(self.on_layer_property_changed)
             if hasattr(layer.events, 'size'):
                 layer.events.size.connect(self.on_layer_property_changed)
-            layer.events.current_edge_color.connect(self.on_layer_property_changed)
-            layer.events.edge_color.connect(self.on_layer_property_changed)
             layer.events.opacity.connect(self.on_layer_property_changed)
 
             @layer.mouse_drag_callbacks.append
@@ -405,12 +410,20 @@ class MassWidget(QSplitter):
                     width = layer.current_edge_width
                     template_layer.current_edge_width = width
                     template_layer.edge_width = [width] * len(template_layer.edge_width)
+                elif event_type.endswith('border_width'):
+                    width = layer.current_border_width
+                    template_layer.current_border_width = width
+                    template_layer.border_width = [width] * len(template_layer.border_width)
                 elif event_type == 'current_size':
                     template_layer.current_size = layer.current_size
                 elif event_type == 'edge_color':
                     color = layer.current_edge_color
                     template_layer.current_edge_color = color
                     template_layer.edge_color = [color] * len(template_layer.edge_color)
+                elif event_type == 'border_color':
+                    color = layer.current_border_color
+                    template_layer.current_border_color = color
+                    template_layer.border_color = [color] * len(template_layer.border_color)
                 elif event_type == 'opacity':
                     template_layer.opacity = layer.opacity
                 template_layer.refresh()

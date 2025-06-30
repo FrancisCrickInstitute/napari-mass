@@ -267,7 +267,7 @@ class DataModel:
                         'face_color': 'transparent', 'edge_color': layer_color, 'edge_width': self.SHAPE_THICKNESS}
         else:
             metadata = {'name': layer_name,
-                        'face_color': layer_color, 'edge_color': 'transparent', 'size': self.POINT_SIZE}
+                        'face_color': layer_color, 'border_color': 'transparent', 'size': self.POINT_SIZE}
         data_layer = values, metadata, layer_type
         return data_layer
 
