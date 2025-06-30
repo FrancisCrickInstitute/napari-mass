@@ -1,7 +1,7 @@
 name: napari-mass
 display_name: Microscopy Array Section Setup
 # use 'hidden' to remove plugin from napari hub search results
-visibility: hidden
+#visibility: hidden
 # see https://napari.org/stable/plugins/manifest.html for valid categories
 categories: ["Annotation", "Segmentation", "Acquisition"]
 contributions:

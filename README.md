@@ -7,7 +7,8 @@
 [![codecov](https://codecov.io/gh/FrancisCrickInstitute/napari-mass/branch/main/graph/badge.svg)](https://codecov.io/gh/FrancisCrickInstitute/napari-mass)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-mass)](https://napari-hub.org/plugins/napari-mass)
 
-Microscopy Array Section Setup napari plugin
+Microscopy Array Section Setup napari plugin: A napari plugin for annotation and guided acquisition working together
+with [SBEMimage](https://github.com/SBEMimage/SBEMimage).
 
 ----------------------------------
 
@@ -43,22 +44,16 @@ the coverage at least stays the same before you submit a pull request.
 
 ## License
 
-Distributed under the terms of the [GNU GPL v3.0] license,
+Distributed under the terms of the [GNU GPL v3.0](LICENSE.md) license,
 "napari-mass" is free and open source software
 
 ## Issues
 
-If you encounter any problems, please [file an issue] along with a detailed description.
+If you encounter any problems, please file an issue along with a detailed description.
 
 [napari]: https://github.com/napari/napari
 [copier]: https://copier.readthedocs.io/en/stable/
 [@napari]: https://github.com/napari
-[MIT]: http://opensource.org/licenses/MIT
-[BSD-3]: http://opensource.org/licenses/BSD-3-Clause
-[GNU GPL v3.0]: http://www.gnu.org/licenses/gpl-3.0.txt
-[GNU LGPL v3.0]: http://www.gnu.org/licenses/lgpl-3.0.txt
-[Apache Software License 2.0]: http://www.apache.org/licenses/LICENSE-2.0
-[Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
 [napari-plugin-template]: https://github.com/napari/napari-plugin-template
 
 [napari]: https://github.com/napari/napari

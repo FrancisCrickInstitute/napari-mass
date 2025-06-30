@@ -108,5 +108,5 @@ exclude = [
     "*_vendor*",
 ]
 
-target-version = "py311"
+target-version = "py312"
 fix = true
